@@ -83,6 +83,8 @@ fn setup_system(
         Transform::from_xyz(3.0, 3.0, 5.0).looking_at(Vec3::ZERO, Vec3::Z),
         PanOrbitCamera {
             axis: [Vec3::X, Vec3::Z, -Vec3::Y],
+            allow_upside_down: true,
+            orbit_smoothness: 0.0,
             ..Default::default()
         },
     ));

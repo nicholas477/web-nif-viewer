@@ -1,4 +1,7 @@
-use bevy::image::{CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor, ImageType};
+use bevy::image::{
+    CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
+    ImageSamplerDescriptor, ImageType,
+};
 use bevy::{
     camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
@@ -82,12 +85,20 @@ pub fn load_nif(
             .uv_set(0)
             .unwrap_or(&[])
             .iter()
-            .map(|uv| [uv.x, 1.0 - uv.y])
+            .map(|uv| [uv.x, uv.y])
             .collect::<Vec<_>>();
         let indices = data
             .triangles
             .iter()
             .flat_map(|triangle| triangle.iter().copied())
+            .collect::<Vec<_>>();
+
+        let colors = data
+            .base
+            .base
+            .vertex_colors
+            .iter()
+            .map(|color| [color.x, color.y, color.z, color.w])
             .collect::<Vec<_>>();
 
         let mut mesh = Mesh::new(
@@ -100,6 +111,9 @@ pub fn load_nif(
         }
         if uvs.len() == data.base.base.vertices.len() {
             mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        }
+        if colors.len() == mesh.count_vertices() {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         }
         mesh.insert_indices(bevy::render::mesh::Indices::U16(indices));
 
@@ -120,7 +134,7 @@ pub fn load_nif(
             ..Default::default()
         };
 
-        // Find NiStencilProperty as a child of this NiTriShape, if it exists. This is a placeholder for any future logic that might use the stencil property.
+        // Find NiStencilProperty as a child of this NiTriShape, if it exists
         if let Some(stencil_property) = shape
             .base
             .base
@@ -138,6 +152,21 @@ pub fn load_nif(
             }
         }
 
+        if let Some(alpha_property) = shape
+            .base
+            .base
+            .base
+            .get_property::<tes3::nif::NiAlphaProperty>(&stream)
+        {
+            alpha_property.alpha_blending().then(|| {
+                material.alpha_mode = AlphaMode::Blend;
+            });
+
+            alpha_property.alpha_testing().then(|| {
+                material.alpha_mode = AlphaMode::Mask(0.5);
+            });
+        }
+
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
             if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
                 let extension = texture_path
@@ -146,10 +175,12 @@ pub fn load_nif(
                     .unwrap_or_default()
                     .to_ascii_lowercase();
 
-                let sampler = ImageSampler::Descriptor(ImageSamplerDescriptor{
+                let sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
                     address_mode_u: ImageAddressMode::Repeat,
                     address_mode_v: ImageAddressMode::Repeat,
                     mipmap_filter: ImageFilterMode::Linear,
+                    mag_filter: ImageFilterMode::Linear,
+                    min_filter: ImageFilterMode::Linear,
                     ..Default::default()
                 });
 
