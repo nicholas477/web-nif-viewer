@@ -54,7 +54,12 @@ pub fn center_camera_on_mesh(
         .flat_map(|(_, mesh)| mesh.compute_aabb())
         .collect::<Vec<_>>();
 
-    let aabb = combine_aabbs(&aabbs).unwrap_or_default();
+    let aabb = combine_aabbs(&aabbs);
+
+    let Some(aabb) = aabb else {
+        bevy::log::warn!("No meshes found to center the camera on.");
+        return;
+    };
 
     pan_orbit_camera.target_focus = aabb.center.to_vec3();
 

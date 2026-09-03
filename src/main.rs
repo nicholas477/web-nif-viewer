@@ -23,8 +23,14 @@ pub struct ArchiveLoadStatus {
     pub error: Option<String>,
 }
 
+#[derive(Clone)]
+pub struct RecentFile {
+    pub zip_url: String,
+    pub file_name: String,
+}
+
 #[derive(Resource, Default)]
-pub struct MenuState {
+pub struct UIState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
     pub file_system: file::FS,
@@ -52,14 +58,12 @@ fn main() {
             ..Default::default()
         }) // Hook egui into Bevy's loop
         .add_systems(Startup, (setup_system, ui::initialize_from_url))
-        .init_resource::<MenuState>()
+        .init_resource::<UIState>()
         .add_systems(EguiPrimaryContextPass, ui::ui_system)
         .add_systems(Update, input::input_system)
         .run();
 }
 
-// Set up the example entities for the scene. The only important thing is a camera which
-// renders directly to the window.
 fn setup_system(
     mut commands: Commands,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,

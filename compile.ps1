@@ -11,8 +11,8 @@ Write-Host "Running wasm-bindgen" -ForegroundColor Green
 wasm-bindgen --out-name esp-viewer --out-dir wasm/target --target web target/wasm32-unknown-unknown/release/esp-viewer.wasm
 
 #Write-Host "Running wasm-opt" -ForegroundColor Green
-#wasm-opt wasm/target/esp-viewer_bg.wasm -O3 -o wasm/target/esp-viewer_bg.wasm
+wasm-opt wasm/target/esp-viewer_bg.wasm -O3 -o wasm/target/esp-viewer_bg.wasm
 
 # copy to Z:\wasm
-#Remove-Item -Path "Z:\wasm" -Recurse -Force
-#Copy-Item -Path "wasm" -Destination "Z:\wasm" -Recurse
+Remove-Item -Path "Z:\wasm" -Recurse -Force
+Copy-Item -Path "wasm" -Destination "Z:\wasm" -Recurse
