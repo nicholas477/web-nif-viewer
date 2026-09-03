@@ -1,3 +1,4 @@
+use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::{
     camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
@@ -9,9 +10,11 @@ use bevy_egui::{
     PrimaryEguiContext, egui,
 };
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use egui::{LayerId, Ui, UiBuilder};
-use tes3::nif::{NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource};
+use tes3::nif::{
+    NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource,
+};
+use crate::nif;
 
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
@@ -71,11 +74,13 @@ pub fn ui_example_system(
         .collect::<Vec<_>>();
 
     if let Some(pending_file) = state.pending_file.clone()
-        && file_names.iter().any(|file_name| file_name == &pending_file)
+        && file_names
+            .iter()
+            .any(|file_name| file_name == &pending_file)
     {
         state.pending_file = None;
         state.selected_file = Some(pending_file.clone());
-        load_nif(
+        nif::load_nif(
             &pending_file,
             &state.file_system,
             &mut commands,
@@ -87,7 +92,7 @@ pub fn ui_example_system(
     }
 
     let left_panel = egui::Panel::left("left_panel")
-        .resizable(false)
+        .resizable(true)
         .show(&mut viewport_ui, |ui| {
             draw_file_selector(ui, &file_names, &mut state.selected_file)
         });
@@ -95,7 +100,7 @@ pub fn ui_example_system(
 
     if let Some(file_name) = left_panel.inner {
         update_query(&state.zip_url_input, Some(&file_name));
-        load_nif(
+        nif::load_nif(
             &file_name,
             &state.file_system,
             &mut commands,
@@ -165,167 +170,6 @@ fn draw_file_selector(
     });
 
     clicked_file
-}
-
-fn load_nif(
-    file_name: &str,
-    file_system: &crate::file::FS,
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    loaded_meshes: &Query<Entity, With<crate::LoadedNifMesh>>,
-) {
-    bevy::log::info!("Loading NIF file: {file_name}");
-    
-    let file_bytes = {
-        let file_system = file_system.read().unwrap();
-        file_system.get(file_name).cloned()
-    };
-
-    let Some(file_bytes) = file_bytes else {
-        bevy::log::error!("Selected file is no longer in the file system: {file_name}");
-        return;
-    };
-
-    if !file_name.to_ascii_lowercase().ends_with(".nif") {
-        return;
-    }
-
-    let Ok(stream) = NiStream::from_bytes(&file_bytes) else {
-        bevy::log::error!("Could not parse NIF file: {file_name}");
-        return;
-    };
-
-    for entity in loaded_meshes.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    let mut shape_count = 0;
-    for shape in stream.objects_of_type::<NiTriShape>() {
-        let Some(data) = stream.get_as::<_, NiTriShapeData>(shape.base.base.geometry_data) else {
-            continue;
-        };
-
-        if data.base.base.vertices.is_empty() || data.triangles.is_empty() {
-            continue;
-        }
-
-        let positions = data
-            .base
-            .base
-            .vertices
-            .iter()
-            .map(|vertex| [vertex.x, vertex.y, vertex.z])
-            .collect::<Vec<_>>();
-
-        let normals = data
-            .base
-            .base
-            .normals
-            .iter()
-            .map(|normal| [normal.x, normal.y, normal.z])
-            .collect::<Vec<_>>();
-
-        let uvs = data
-            .base
-            .base
-            .uv_set(0)
-            .unwrap_or(&[])
-            .iter()
-            .map(|uv| [uv.x, 1.0 - uv.y])
-            .collect::<Vec<_>>();
-        let indices = data
-            .triangles
-            .iter()
-            .flat_map(|triangle| triangle.iter().copied())
-            .collect::<Vec<_>>();
-
-        let mut mesh = Mesh::new(
-            bevy::render::render_resource::PrimitiveTopology::TriangleList,
-            bevy::asset::RenderAssetUsages::default(),
-        );
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        if normals.len() == data.base.base.vertices.len() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        }
-        if uvs.len() == data.base.base.vertices.len() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        }
-        mesh.insert_indices(bevy::render::mesh::Indices::U16(indices));
-
-        let av_object = &shape.base.base.base;
-        let rotation = Mat3::from_cols_array(&av_object.rotation.to_cols_array()).transpose();
-        let transform = Transform {
-            translation: Vec3::new(
-                av_object.translation.x,
-                av_object.translation.y,
-                av_object.translation.z,
-            ),
-            rotation: Quat::from_mat3(&rotation),
-            scale: Vec3::splat(av_object.scale * 0.01), // Scale down by 0.01 to convert from centimeters to meters
-        };
-
-        let mut material = StandardMaterial::default();
-        if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
-                let extension = texture_path
-                    .rsplit('.')
-                    .next()
-                    .unwrap_or_default()
-                    .to_ascii_lowercase();
-
-                match Image::from_buffer(
-                    &texture_bytes,
-                    ImageType::Extension(&extension),
-                    CompressedImageFormats::all(),
-                    true,
-                    ImageSampler::linear(),
-                    bevy::asset::RenderAssetUsages::default(),
-                ) {
-                    Ok(image) => {
-                        material.base_color_texture = Some(images.add(image));
-                    }
-                    Err(error) => {
-                        bevy::log::warn!(
-                            "Could not decode texture {texture_path} for {file_name}: {error}"
-                        );
-                    }
-                }
-            } else {
-                bevy::log::warn!("Texture not found in archive: {texture_path}");
-            }
-        }
-
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(material)),
-            transform,
-            crate::LoadedNifMesh,
-        ));
-        shape_count += 1;
-    }
-
-    bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {file_name}");
-}
-
-fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<String> {
-    let property = shape
-        .base
-        .base
-        .base
-        .get_property::<NiTexturingProperty>(stream)?;
-    let texture_map = property.texture_maps.first()?.as_ref()?;
-    let texture_link = match texture_map {
-        TextureMap::Map(map) => map.texture,
-        TextureMap::BumpMap(map) => map.base.texture,
-    };
-    let texture = stream.get(texture_link)?;
-
-    match &texture.source {
-        TextureSource::External(path) => Some(path.clone()),
-        TextureSource::Internal(_) => None,
-    }
 }
 
 fn query_state() -> Option<(String, Option<String>)> {
@@ -404,7 +248,7 @@ fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState
                             Ok(fs) => {
                                 bevy::log::info!("Zip fetched and parsed successfully.");
                                 *state_fs.write().unwrap() = fs;
-                            },
+                            }
                             Err(e) => bevy::log::error!("Error unzipping asset: {:?}", e),
                         }
                     });

@@ -1,0 +1,3 @@
+[build]
+# Automatically target WebAssembly for all cargo build commands in this project
+target = "wasm32-unknown-unknown"

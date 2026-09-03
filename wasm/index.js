@@ -49,6 +49,12 @@ async function loadWasmWithProgress(wasmUrl) {
 
     // Hide the loader once initialization completes
     overlay.style.display = 'none';
+
+    // Disable right click context menu on the canvas to prevent default browser behavior
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
 }
 
 loadWasmWithProgress('./target/esp-viewer_bg.wasm').catch((err) => {

@@ -80,7 +80,8 @@ pub async fn fetch_and_unzip(url: &str) -> Result<HashMap<String, Vec<u8>>, File
         if file.is_file() {
             // Read the file contents into a buffer or handle it as needed
             let mut contents = Vec::new();
-            file.read_to_end(&mut contents).map_err(|e| FileError::IoError(e))?;
+            file.read_to_end(&mut contents)
+                .map_err(|e| FileError::IoError(e))?;
 
             file_system.insert(normalize_path(&name), contents);
         }

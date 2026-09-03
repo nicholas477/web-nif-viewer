@@ -1,7 +1,13 @@
-use std::{collections::HashMap, sync::{Arc, RwLock}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers}, dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, prelude::*, window::{PrimaryWindow, WindowMode},
+    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
+    prelude::*,
+    window::{PrimaryWindow, WindowMode},
 };
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
@@ -12,6 +18,7 @@ use egui::{LayerId, Ui, UiBuilder};
 use wgpu_types::BlendState;
 
 mod file;
+mod nif;
 mod ui;
 
 #[derive(Resource, Default)]
@@ -74,7 +81,7 @@ fn setup_system(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(3.0, 3.0, 5.0).looking_at(Vec3::ZERO, Vec3::Z),
-        PanOrbitCamera{
+        PanOrbitCamera {
             axis: [Vec3::X, Vec3::Z, -Vec3::Y],
             ..Default::default()
         },
