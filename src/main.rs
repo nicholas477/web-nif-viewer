@@ -22,6 +22,12 @@ mod nif;
 mod input;
 mod ui;
 
+#[derive(Clone, Default)]
+pub struct ArchiveLoadStatus {
+    pub phase: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Resource, Default)]
 pub struct MenuState {
     pub show_zip_popup: bool,
@@ -29,6 +35,8 @@ pub struct MenuState {
     pub file_system: file::FS,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
+    pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
+    pub nif_load_error: Option<String>,
 }
 
 fn main() {

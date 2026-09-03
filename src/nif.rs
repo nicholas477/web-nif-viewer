@@ -98,7 +98,7 @@ pub fn load_nif(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     loaded_meshes: &Query<Entity, With<LoadedNifMesh>>,
-) {
+) -> Result<(), String> {
     bevy::log::info!("Loading NIF file: {file_name}");
 
     let file_bytes = {
@@ -107,17 +107,15 @@ pub fn load_nif(
     };
 
     let Some(file_bytes) = file_bytes else {
-        bevy::log::error!("Selected file is no longer in the file system: {file_name}");
-        return;
+        return Err(format!("Selected file is no longer available: {file_name}"));
     };
 
     if !file_name.to_ascii_lowercase().ends_with(".nif") {
-        return;
+        return Err(format!("The selected file is not a NIF: {file_name}"));
     }
 
     let Ok(stream) = NiStream::from_bytes(&file_bytes) else {
-        bevy::log::error!("Could not parse NIF file: {file_name}");
-        return;
+        return Err(format!("Could not parse the NIF file: {file_name}"));
     };
 
     for entity in loaded_meshes.iter() {
@@ -287,7 +285,12 @@ pub fn load_nif(
         shape_count += 1;
     }
 
+    if shape_count == 0 {
+        return Err(format!("No renderable meshes were found in: {file_name}"));
+    }
+
     bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {file_name}");
+    Ok(())
 }
 
 pub fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<String> {

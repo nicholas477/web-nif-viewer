@@ -11,6 +11,7 @@ use web_sys::{Response, Window};
 use zip::ZipArchive;
 
 pub type FS = Arc<RwLock<HashMap<String, Vec<u8>>>>;
+pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;
 
 #[derive(Debug)]
 pub enum FileError {
@@ -59,19 +60,29 @@ pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
 }
 
 // Your previous code modified slightly to yield standard errors if desired
-pub async fn fetch_and_unzip(url: &str) -> Result<HashMap<String, Vec<u8>>, FileError> {
+pub async fn fetch_and_unzip(
+    url: &str,
+    status: &ArchiveLoadStatus,
+) -> Result<HashMap<String, Vec<u8>>, FileError> {
     let mut file_system: HashMap<String, Vec<u8>> = HashMap::new();
 
+    status.write().unwrap().phase = Some("Downloading archive...".to_string());
     let zip_bytes = fetch_file_from_server(url)
         .await
         .map_err(|e| FileError::FetchError(format!("{:?}", e)))?;
 
+    status.write().unwrap().phase = Some("Opening archive...".to_string());
     let cursor = Cursor::new(zip_bytes);
     let mut archive =
         ZipArchive::new(cursor).map_err(|e| FileError::UnzipError(format!("{:?}", e)))?;
 
     // Iterate through each file inside the ZIP
     for i in 0..archive.len() {
+        status.write().unwrap().phase = Some(format!(
+            "Extracting files... {}/{}",
+            i + 1,
+            archive.len()
+        ));
         let mut file = archive
             .by_index(i)
             .map_err(|e| FileError::UnzipError(format!("{:?}", e)))?;
@@ -87,6 +98,7 @@ pub async fn fetch_and_unzip(url: &str) -> Result<HashMap<String, Vec<u8>>, File
         }
     }
 
+    status.write().unwrap().phase = None;
     Ok(file_system)
 }
 

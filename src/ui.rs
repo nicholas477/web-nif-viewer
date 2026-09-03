@@ -31,13 +31,20 @@ pub fn initialize_from_url(mut state: ResMut<crate::MenuState>) {
     state.pending_file = selected_file;
 
     let file_system = state.file_system.clone();
+    let load_status = state.archive_load_status.clone();
     spawn_local(async move {
-        match crate::file::fetch_and_unzip(&zip_url).await {
+        match crate::file::fetch_and_unzip(&zip_url, &load_status).await {
             Ok(files) => {
                 bevy::log::info!("Zip fetched and parsed successfully.");
                 file_system.write().unwrap().extend(files);
             }
-            Err(error) => bevy::log::error!("Error unzipping asset: {:?}", error),
+            Err(error) => {
+                let message = error.to_string();
+                bevy::log::error!("Error unzipping asset: {message}");
+                let mut status = load_status.write().unwrap();
+                status.phase = None;
+                status.error = Some(message);
+            }
         }
     });
 }
@@ -83,7 +90,7 @@ pub fn ui_system(
     {
         state.pending_file = None;
         state.selected_file = Some(pending_file.clone());
-        nif::load_nif(
+        if let Err(error) = nif::load_nif(
             &pending_file,
             &state.file_system,
             &mut commands,
@@ -91,7 +98,9 @@ pub fn ui_system(
             &mut images,
             &mut materials,
             &loaded_meshes,
-        );
+        ) {
+            state.nif_load_error = Some(error);
+        }
 
         let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
@@ -113,7 +122,7 @@ pub fn ui_system(
 
     if let Some(file_name) = left_panel.inner {
         update_query(&state.zip_url_input, Some(&file_name));
-        nif::load_nif(
+        if let Err(error) = nif::load_nif(
             &file_name,
             &state.file_system,
             &mut commands,
@@ -121,7 +130,9 @@ pub fn ui_system(
             &mut images,
             &mut materials,
             &loaded_meshes,
-        );
+        ) {
+            state.nif_load_error = Some(error);
+        }
     }
 
     let mut top = egui::Panel::top("top_panel")
@@ -148,10 +159,52 @@ pub fn ui_system(
     });
 
     if state.show_zip_popup {
-        draw_zip_popup(contexts, state)?;
+        draw_zip_popup(ctx, &mut state);
     }
 
+    draw_load_status(ctx, &state);
+    draw_error_popup(ctx, &mut state);
+
     Ok(())
+}
+
+fn draw_load_status(ctx: &egui::Context, state: &crate::MenuState) {
+    let status = state.archive_load_status.read().unwrap();
+    let Some(phase) = status.phase.as_deref() else {
+        return;
+    };
+
+    egui::Area::new("archive_load_status".into())
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Spinner::new());
+                    ui.label(phase);
+                });
+            });
+        });
+}
+
+fn draw_error_popup(ctx: &egui::Context, state: &mut crate::MenuState) {
+    let archive_error = state.archive_load_status.read().unwrap().error.clone();
+    let error = state.nif_load_error.clone().or(archive_error);
+    let Some(error) = error else {
+        return;
+    };
+
+    egui::Window::new("Unable to Load File")
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.label(error);
+            ui.add_space(8.0);
+            if ui.button("Close").clicked() {
+                state.nif_load_error = None;
+                state.archive_load_status.write().unwrap().error = None;
+            }
+        });
 }
 
 fn draw_file_selector(
@@ -227,11 +280,7 @@ fn update_query(zip_url: &str, selected_file: Option<&str>) {
     }
 }
 
-fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState>) -> Result {
-    let ctx = contexts.ctx_mut()?;
-
-    let show_window = &mut state.show_zip_popup;
-
+fn draw_zip_popup(ctx: &egui::Context, state: &mut crate::MenuState) {
     egui::Window::new("Load Compressed Archive")
         .resizable(false)
         .collapsible(false)
@@ -250,19 +299,31 @@ fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState
                     update_query(&url_to_load, None);
                     state.selected_file = None;
                     state.pending_file = None;
+                    {
+                        let mut status = state.archive_load_status.write().unwrap();
+                        status.phase = Some("Preparing download...".to_string());
+                        status.error = None;
+                    }
 
                     let state_fs = state.file_system.clone(); // Clone the Arc<RwLock<...>> to move into the async block
+                    let load_status = state.archive_load_status.clone();
 
                     //let state = state.clone(); // Clone the state to move into the async block
                     // Hand off the execution to the browser's async event loop
                     spawn_local(async move {
                         // Call your previously implemented zip loading code here
-                        match crate::file::fetch_and_unzip(&url_to_load).await {
+                        match crate::file::fetch_and_unzip(&url_to_load, &load_status).await {
                             Ok(fs) => {
                                 bevy::log::info!("Zip fetched and parsed successfully.");
                                 *state_fs.write().unwrap() = fs;
                             }
-                            Err(e) => bevy::log::error!("Error unzipping asset: {:?}", e),
+                            Err(error) => {
+                                let message = error.to_string();
+                                bevy::log::error!("Error unzipping asset: {message}");
+                                let mut status = load_status.write().unwrap();
+                                status.phase = None;
+                                status.error = Some(message);
+                            }
                         }
                     });
 
@@ -274,6 +335,4 @@ fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState
                 }
             });
         });
-
-    Ok(())
 }
