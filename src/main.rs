@@ -20,6 +20,7 @@ pub struct MenuState {
     pub zip_url_input: String,
     pub file_system: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     pub selected_file: Option<String>,
+    pub pending_file: Option<String>,
 }
 
 #[derive(Component)]
@@ -43,7 +44,7 @@ fn main() {
         .add_plugins(EguiPlugin {
             ..Default::default()
         }) // Hook egui into Bevy's loop
-        .add_systems(Startup, setup_system)
+        .add_systems(Startup, (setup_system, ui::initialize_from_url))
         .init_resource::<MenuState>()
         .add_systems(EguiPrimaryContextPass, ui::ui_example_system)
         .run();

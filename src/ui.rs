@@ -13,7 +13,31 @@ use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use egui::{LayerId, Ui, UiBuilder};
 use tes3::nif::{NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource};
 
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
+
+const ZIP_QUERY_PARAMETER: &str = "zip";
+const FILE_QUERY_PARAMETER: &str = "file";
+
+pub fn initialize_from_url(mut state: ResMut<crate::MenuState>) {
+    let Some((zip_url, selected_file)) = query_state() else {
+        return;
+    };
+
+    state.zip_url_input = zip_url.clone();
+    state.pending_file = selected_file;
+
+    let file_system = state.file_system.clone();
+    spawn_local(async move {
+        match crate::file::fetch_and_unzip(&zip_url).await {
+            Ok(files) => {
+                bevy::log::info!("Zip fetched and parsed successfully.");
+                file_system.write().unwrap().extend(files);
+            }
+            Err(error) => bevy::log::error!("Error unzipping asset: {:?}", error),
+        }
+    });
+}
 
 // This function runs every frame. Therefore, updating the viewport after drawing the gui.
 // With a resource which stores the dimensions of the panels, the update of the Viewport can
@@ -46,6 +70,22 @@ pub fn ui_example_system(
         .cloned()
         .collect::<Vec<_>>();
 
+    if let Some(pending_file) = state.pending_file.clone()
+        && file_names.iter().any(|file_name| file_name == &pending_file)
+    {
+        state.pending_file = None;
+        state.selected_file = Some(pending_file.clone());
+        load_nif(
+            &pending_file,
+            &state.file_system,
+            &mut commands,
+            &mut meshes,
+            &mut images,
+            &mut materials,
+            &loaded_meshes,
+        );
+    }
+
     let left_panel = egui::Panel::left("left_panel")
         .resizable(false)
         .show(&mut viewport_ui, |ui| {
@@ -54,6 +94,7 @@ pub fn ui_example_system(
     let mut left = left_panel.response.rect.width(); // height is ignored, as the panel has a height of 100% of the screen
 
     if let Some(file_name) = left_panel.inner {
+        update_query(&state.zip_url_input, Some(&file_name));
         load_nif(
             &file_name,
             &state.file_system,
@@ -301,6 +342,48 @@ fn normalize_path(path: &str) -> String {
     path.replace('/', "\\").to_ascii_lowercase()
 }
 
+fn query_state() -> Option<(String, Option<String>)> {
+    let window = web_sys::window()?;
+    let search = window.location().search().ok()?;
+    let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
+    let zip_url = params.get(ZIP_QUERY_PARAMETER)?;
+
+    Some((zip_url, params.get(FILE_QUERY_PARAMETER)))
+}
+
+fn update_query(zip_url: &str, selected_file: Option<&str>) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(current_url) = window.location().href() else {
+        return;
+    };
+    let Ok(url) = web_sys::Url::new(&current_url) else {
+        return;
+    };
+
+    let params = url.search_params();
+    if zip_url.is_empty() {
+        params.delete(ZIP_QUERY_PARAMETER);
+    } else {
+        params.set(ZIP_QUERY_PARAMETER, zip_url);
+    }
+
+    if let Some(selected_file) = selected_file {
+        params.set(FILE_QUERY_PARAMETER, selected_file);
+    } else {
+        params.delete(FILE_QUERY_PARAMETER);
+    }
+
+    let Ok(history) = window.history() else {
+        return;
+    };
+
+    if let Err(error) = history.replace_state_with_url(&JsValue::NULL, "", Some(&url.href())) {
+        bevy::log::warn!("Could not update page URL: {:?}", error);
+    }
+}
+
 fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState>) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -321,6 +404,9 @@ fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState
             ui.horizontal(|ui| {
                 if ui.button("Download & Extract").clicked() {
                     let url_to_load = state.zip_url_input.clone();
+                    update_query(&url_to_load, None);
+                    state.selected_file = None;
+                    state.pending_file = None;
 
                     let state_fs = state.file_system.clone(); // Clone the Arc<RwLock<...>> to move into the async block
 
