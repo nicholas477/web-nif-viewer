@@ -1,20 +1,14 @@
 use crate::nif;
-use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
+    camera::Viewport,
     prelude::*,
     window::PrimaryWindow,
 };
 use bevy_egui::{
-    EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
-    PrimaryEguiContext, egui,
+    EguiContext, EguiContexts, egui,
 };
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
+use bevy_panorbit_camera::PanOrbitCamera;
 use egui::{LayerId, Ui, UiBuilder};
-use tes3::nif::{
-    NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource,
-};
 
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
@@ -55,7 +49,7 @@ pub fn initialize_from_url(mut state: ResMut<crate::MenuState>) {
 pub fn ui_system(
     mut contexts: EguiContexts,
     mut camera: Single<&mut Camera, Without<EguiContext>>,
-    mut camera3d: Single<(&mut Camera3d, &Projection, &mut PanOrbitCamera), Without<EguiContext>>,
+    camera3d: Single<(&mut Camera3d, &Projection, &mut PanOrbitCamera), Without<EguiContext>>,
     window: Single<&mut Window, With<PrimaryWindow>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,

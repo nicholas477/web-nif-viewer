@@ -1,4 +1,3 @@
-use bevy::ecs::system::ResMut;
 use std::{
     collections::HashMap,
     fmt,
@@ -7,7 +6,7 @@ use std::{
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Response, Window};
+use web_sys::Response;
 use zip::ZipArchive;
 
 pub type FS = Arc<RwLock<HashMap<String, Vec<u8>>>>;
@@ -92,7 +91,7 @@ pub async fn fetch_and_unzip(
             // Read the file contents into a buffer or handle it as needed
             let mut contents = Vec::new();
             file.read_to_end(&mut contents)
-                .map_err(|e| FileError::IoError(e))?;
+                .map_err(FileError::IoError)?;
 
             file_system.insert(normalize_path(&name), contents);
         }

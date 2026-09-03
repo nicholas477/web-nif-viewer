@@ -3,19 +3,10 @@ use bevy::image::{
     CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
     ImageSamplerDescriptor, ImageType,
 };
-use bevy::math::bounding::{Aabb3d, BoundingVolume};
-use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
-    prelude::*,
-    window::PrimaryWindow,
-};
-use bevy_egui::{
-    EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
-    PrimaryEguiContext, egui,
-};
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use egui::{LayerId, Ui, UiBuilder};
+use bevy::math::bounding::BoundingVolume;
+use bevy::prelude::*;
+use bevy_egui::egui;
+use bevy_panorbit_camera::PanOrbitCamera;
 use tes3::nif::{
     NiStencilProperty, NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap,
     TextureSource,

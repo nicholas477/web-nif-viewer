@@ -1,20 +1,7 @@
 use crate::nif;
-use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
-use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
-    prelude::*,
-    window::PrimaryWindow,
-};
-use bevy_egui::{
-    EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
-    PrimaryEguiContext, egui,
-};
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use egui::{LayerId, Ui, UiBuilder};
-use tes3::nif::{
-    NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource,
-};
+use bevy::prelude::*;
+use bevy_egui::egui;
+use bevy_panorbit_camera::PanOrbitCamera;
 
 pub fn input_system(
     camera_query: Single<(&Projection, &mut PanOrbitCamera)>,

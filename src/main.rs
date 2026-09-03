@@ -1,20 +1,15 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
+    camera::{CameraOutputMode, visibility::RenderLayers},
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
     prelude::*,
-    window::{PrimaryWindow, WindowMode},
 };
 use bevy_egui::{
-    EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
+    EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext, egui,
 };
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use egui::{LayerId, Ui, UiBuilder};
 use wgpu_types::BlendState;
 
 mod file;
