@@ -1,3 +1,4 @@
+use crate::nif;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::{
     camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
@@ -14,7 +15,6 @@ use egui::{LayerId, Ui, UiBuilder};
 use tes3::nif::{
     NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap, TextureSource,
 };
-use crate::nif;
 
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
@@ -45,15 +45,16 @@ pub fn initialize_from_url(mut state: ResMut<crate::MenuState>) {
 // This function runs every frame. Therefore, updating the viewport after drawing the gui.
 // With a resource which stores the dimensions of the panels, the update of the Viewport can
 // be done in another system.
-pub fn ui_example_system(
+pub fn ui_system(
     mut contexts: EguiContexts,
     mut camera: Single<&mut Camera, Without<EguiContext>>,
+    mut camera3d: Single<(&mut Camera3d, &Projection, &mut PanOrbitCamera), Without<EguiContext>>,
     window: Single<&mut Window, With<PrimaryWindow>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    loaded_meshes: Query<Entity, With<crate::LoadedNifMesh>>,
+    loaded_meshes: Query<Entity, With<nif::LoadedNifMesh>>,
     mut state: ResMut<crate::MenuState>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
@@ -73,6 +74,8 @@ pub fn ui_example_system(
         .cloned()
         .collect::<Vec<_>>();
 
+    let window: &mut Window = window.into_inner().into_inner();
+
     if let Some(pending_file) = state.pending_file.clone()
         && file_names
             .iter()
@@ -89,9 +92,19 @@ pub fn ui_example_system(
             &mut materials,
             &loaded_meshes,
         );
+
+        let (_, projection, mut pan_orbit) = camera3d.into_inner();
+
+        nif::center_camera_on_mesh(
+            &meshes,
+            projection,
+            window,
+            &mut pan_orbit,
+        );
     }
 
     let left_panel = egui::Panel::left("left_panel")
+        .default_size(400.0)
         .resizable(true)
         .show(&mut viewport_ui, |ui| {
             draw_file_selector(ui, &file_names, &mut state.selected_file)

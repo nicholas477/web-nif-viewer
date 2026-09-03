@@ -8,7 +8,6 @@ opt-level = 's'
 lto = 'thin'
 
 [dependencies]
-bevy = {version = "0.19.1", features = ["bevy_dev_tools", "dds"]}
 bevy_egui = "0.42.0"
 bevy_panorbit_camera = "0.35.0"
 js-sys = "0.3.104"
@@ -18,6 +17,38 @@ wgpu-types = "29.0.4"
 tes3 = { git = "https://github.com/Greatness7/tes3", features = ["esp", "nif"] }
 zip = "8.6.0"
 
+[dependencies.bevy]
+version = "0.19.1"
+default-features = false
+features = [
+    "2d",
+    "3d",
+    "ui",
+
+    # Parts of Bevy:
+    "bevy_asset",
+    "bevy_log",
+    "bevy_pbr",
+    "bevy_core_pipeline",
+    "bevy_gizmos",
+    "bevy_dev_tools",
+    "bevy_render",
+    "bevy_window",
+
+    # Platform-Specific
+    "webgl2",                # Web: use WebGL2 instead of WebGPU
+
+    # Asset File Format Support
+    "dds",
+]
+
 [dependencies.web-sys]
 version = "0.3"
-features = ["History", "Location", "Response", "Url", "UrlSearchParams", "Window"]
+features = [
+    "History",
+    "Location",
+    "Response",
+    "Url",
+    "UrlSearchParams",
+    "Window",
+]

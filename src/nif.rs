@@ -1,7 +1,9 @@
+use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::image::{
     CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
     ImageSamplerDescriptor, ImageType,
 };
+use bevy::math::bounding::{Aabb3d, BoundingVolume};
 use bevy::{
     camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
@@ -19,6 +21,75 @@ use tes3::nif::{
     TextureSource,
 };
 
+#[derive(Component)]
+pub struct LoadedNifMesh;
+
+fn combine_aabbs(aabbs: &[Aabb]) -> Option<Aabb> {
+    if aabbs.is_empty() {
+        return None;
+    }
+
+    // Initialize min and max using the first AABB's actual bounds
+    let first_min = aabbs[0].center - aabbs[0].half_extents;
+    let first_max = aabbs[0].center + aabbs[0].half_extents;
+
+    let (min, max) = aabbs.iter().skip(1).fold(
+        (first_min, first_max),
+        |(mut current_min, mut current_max), aabb| {
+            let aabb_min = aabb.center - aabb.half_extents;
+            let aabb_max = aabb.center + aabb.half_extents;
+
+            // Expand the bounds to encompass the new AABB
+            current_min = current_min.min(aabb_min);
+            current_max = current_max.max(aabb_max);
+
+            (current_min, current_max)
+        },
+    );
+
+    // Bevy provides a helper to build an Aabb from its min and max points
+    Some(Aabb::from_min_max(min.to_vec3(), max.to_vec3()))
+}
+
+// Center camera on loaded mesh
+pub fn center_camera_on_mesh(
+    meshes: &Assets<Mesh>,
+    camera_projection: &Projection,
+    window: &Window,
+    pan_orbit_camera: &mut PanOrbitCamera,
+) {
+    let aabbs = meshes
+        .iter()
+        .flat_map(|(_, mesh)| mesh.compute_aabb())
+        .collect::<Vec<_>>();
+
+    let aabb = combine_aabbs(&aabbs).unwrap_or_default();
+
+    pan_orbit_camera.target_focus = aabb.center.to_vec3();
+
+    // Calculate the radius of the bounding sphere that encompasses the AABB
+    // The sphere should fit within the camera's field of view, so we use the diagonal of the AABB to determine the distance
+    let bounding_sphere_radius = aabb.half_extents.length();
+
+    if let Projection::Perspective(perspective) = camera_projection {
+        let fov_v = perspective.fov; // Vertical FOV in radians
+        let aspect_ratio = window.width() / window.height();
+
+        // Calculate horizontal FOV from vertical FOV and aspect ratio
+        let fov_h = 2.0 * ((fov_v / 2.0).tan() * aspect_ratio).atan();
+
+        // Distance required to fit vertically and horizontally
+        let distance_v = bounding_sphere_radius / (fov_v / 2.0).sin();
+        let distance_h = bounding_sphere_radius / (fov_h / 2.0).sin();
+
+        // Choose the larger distance to prevent clipping on any side
+        let required_distance = distance_v.max(distance_h);
+
+        // Update your camera's orbit distance
+        pan_orbit_camera.target_radius = required_distance;
+    }
+}
+
 pub fn load_nif(
     file_name: &str,
     file_system: &crate::file::FS,
@@ -26,7 +97,7 @@ pub fn load_nif(
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
-    loaded_meshes: &Query<Entity, With<crate::LoadedNifMesh>>,
+    loaded_meshes: &Query<Entity, With<LoadedNifMesh>>,
 ) {
     bevy::log::info!("Loading NIF file: {file_name}");
 
@@ -126,7 +197,7 @@ pub fn load_nif(
                 av_object.translation.z,
             ),
             rotation: Quat::from_mat3(&rotation),
-            scale: Vec3::splat(av_object.scale * 0.01), // Scale down by 0.01 to convert from centimeters to meters
+            scale: Vec3::splat(av_object.scale), // Scale down by 0.01 to convert from centimeters to meters
         };
 
         let mut material = StandardMaterial {
@@ -211,7 +282,7 @@ pub fn load_nif(
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(materials.add(material)),
             transform,
-            crate::LoadedNifMesh,
+            LoadedNifMesh,
         ));
         shape_count += 1;
     }

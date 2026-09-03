@@ -19,6 +19,7 @@ use wgpu_types::BlendState;
 
 mod file;
 mod nif;
+mod input;
 mod ui;
 
 #[derive(Resource, Default)]
@@ -30,9 +31,6 @@ pub struct MenuState {
     pub pending_file: Option<String>,
 }
 
-#[derive(Component)]
-pub struct LoadedNifMesh;
-
 fn main() {
     App::new()
         .add_plugins(PanOrbitCameraPlugin)
@@ -40,7 +38,6 @@ fn main() {
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     prevent_default_event_handling: false,
-                    mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
                     fit_canvas_to_parent: true,
                     ..default()
                 }),
@@ -53,7 +50,8 @@ fn main() {
         }) // Hook egui into Bevy's loop
         .add_systems(Startup, (setup_system, ui::initialize_from_url))
         .init_resource::<MenuState>()
-        .add_systems(EguiPrimaryContextPass, ui::ui_example_system)
+        .add_systems(EguiPrimaryContextPass, ui::ui_system)
+        .add_systems(Update, input::input_system)
         .run();
 }
 
@@ -62,8 +60,6 @@ fn main() {
 fn setup_system(
     mut commands: Commands,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     // Disable the automatic creation of a primary context to set it up manually for the camera we need.
     egui_global_settings.auto_create_primary_context = false;
@@ -73,14 +69,18 @@ fn setup_system(
         // You need to spawn an entity with this component
         InfiniteGrid,
         // Optional component you can use to configure the grid
-        InfiniteGridSettings::default(),
+        InfiniteGridSettings{
+            fadeout_distance: 100.0 * 100.0, // 100 meters
+            scale: 0.01, // Scale down by 0.01 to convert from centimeters to meters
+            ..Default::default()
+        },
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
     ));
 
     // World camera.
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(3.0, 3.0, 5.0).looking_at(Vec3::ZERO, Vec3::Z),
+        Transform::from_xyz(300.0, 300.0, 500.0).looking_at(Vec3::ZERO, Vec3::Z),
         PanOrbitCamera {
             axis: [Vec3::X, Vec3::Z, -Vec3::Y],
             allow_upside_down: true,
