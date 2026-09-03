@@ -18,7 +18,7 @@ mod ui;
 pub struct MenuState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
-    pub file_system: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    pub file_system: file::FS,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
 }

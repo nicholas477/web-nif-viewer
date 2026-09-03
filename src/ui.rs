@@ -169,7 +169,7 @@ fn draw_file_selector(
 
 fn load_nif(
     file_name: &str,
-    file_system: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<u8>>>>,
+    file_system: &crate::file::FS,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
@@ -218,6 +218,7 @@ fn load_nif(
             .iter()
             .map(|vertex| [vertex.x, vertex.y, vertex.z])
             .collect::<Vec<_>>();
+
         let normals = data
             .base
             .base
@@ -225,6 +226,7 @@ fn load_nif(
             .iter()
             .map(|normal| [normal.x, normal.y, normal.z])
             .collect::<Vec<_>>();
+
         let uvs = data
             .base
             .base
@@ -266,7 +268,7 @@ fn load_nif(
 
         let mut material = StandardMaterial::default();
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) = find_file(file_system, &texture_path) {
+            if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
                 let extension = texture_path
                     .rsplit('.')
                     .next()
@@ -324,22 +326,6 @@ fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<String>
         TextureSource::External(path) => Some(path.clone()),
         TextureSource::Internal(_) => None,
     }
-}
-
-fn find_file(
-    file_system: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<u8>>>>,
-    requested_path: &str,
-) -> Option<Vec<u8>> {
-    let requested_path = normalize_path(requested_path);
-    let file_system = file_system.read().ok()?;
-
-    file_system.iter().find_map(|(path, bytes)| {
-        (normalize_path(path) == requested_path).then(|| bytes.clone())
-    })
-}
-
-fn normalize_path(path: &str) -> String {
-    path.replace('/', "\\").to_ascii_lowercase()
 }
 
 fn query_state() -> Option<(String, Option<String>)> {
@@ -417,7 +403,7 @@ fn draw_zip_popup(mut contexts: EguiContexts, mut state: ResMut<crate::MenuState
                         match crate::file::fetch_and_unzip(&url_to_load).await {
                             Ok(fs) => {
                                 bevy::log::info!("Zip fetched and parsed successfully.");
-                                state_fs.write().unwrap().extend(fs); // Update the shared file system
+                                *state_fs.write().unwrap() = fs;
                             },
                             Err(e) => bevy::log::error!("Error unzipping asset: {:?}", e),
                         }
