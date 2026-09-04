@@ -37,6 +37,43 @@ pub struct RecentFile {
     pub file_name: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewMode {
+    Lit,
+    #[default]
+    Unlit,
+    VertexColors,
+    Normals,
+    Collision,
+}
+
+impl ViewMode {
+    pub const ALL: [Self; 5] = [
+        Self::Lit,
+        Self::Unlit,
+        Self::VertexColors,
+        Self::Normals,
+        Self::Collision,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Lit => "Lit",
+            Self::Unlit => "Unlit",
+            Self::VertexColors => "Vertex colors",
+            Self::Normals => "Normals",
+            Self::Collision => "Collision",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct NifObjectInfo {
+    pub type_name: String,
+    pub fields: String,
+    pub children: Vec<usize>,
+}
+
 #[derive(Resource, Default)]
 pub struct UIState {
     pub show_zip_popup: bool,
@@ -47,6 +84,9 @@ pub struct UIState {
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
     pub nif_load_error: Option<String>,
     pub upload_status: Arc<RwLock<UploadStatus>>,
+    pub nif_objects: Vec<NifObjectInfo>,
+    pub nif_roots: Vec<usize>,
+    pub view_mode: ViewMode,
 }
 
 fn main() {

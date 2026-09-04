@@ -7,13 +7,20 @@ use bevy::math::bounding::BoundingVolume;
 use bevy::prelude::*;
 use bevy_egui::egui;
 use bevy_panorbit_camera::PanOrbitCamera;
+use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiStencilProperty, NiStream, NiTexturingProperty, NiTriShape, NiTriShapeData, TextureMap,
-    TextureSource,
+    NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream, NiTexturingProperty,
+    NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap, TextureSource,
 };
 
 #[derive(Component)]
-pub struct LoadedNifMesh;
+pub struct LoadedNifMesh {
+    default_mesh: Handle<Mesh>,
+    vertex_color_mesh: Handle<Mesh>,
+    normal_mesh: Handle<Mesh>,
+    diffuse_texture: Option<Handle<Image>>,
+    is_collision: bool,
+}
 
 fn combine_aabbs(aabbs: &[Aabb]) -> Option<Aabb> {
     if aabbs.is_empty() {
@@ -89,6 +96,9 @@ pub fn center_camera_on_mesh(
 pub fn load_nif(
     file_name: &str,
     file_system: &crate::file::FS,
+    nif_objects: &mut Vec<crate::NifObjectInfo>,
+    nif_roots: &mut Vec<usize>,
+    view_mode: crate::ViewMode,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
@@ -114,12 +124,52 @@ pub fn load_nif(
         return Err(format!("Could not parse the NIF file: {file_name}"));
     };
 
+    let object_indices = stream
+        .objects
+        .keys()
+        .enumerate()
+        .map(|(index, key)| (key, index))
+        .collect::<HashMap<_, _>>();
+    *nif_objects = stream
+        .objects
+        .iter()
+        .map(|(key, object)| crate::NifObjectInfo {
+            type_name: String::from_utf8_lossy(object.type_name()).into_owned(),
+            fields: format!("{object:#?}"),
+            children: stream
+                .get_as::<_, NiNode>(NiLink::<NiNode>::new(key))
+                .map(|node| {
+                    node.children
+                        .iter()
+                        .filter_map(|child| object_indices.get(&child.key).copied())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+        .collect();
+    *nif_roots = stream
+        .roots
+        .iter()
+        .filter_map(|root| object_indices.get(&root.key).copied())
+        .collect();
+
+    let collision_shapes = stream
+        .objects_of_type::<RootCollisionNode>()
+        .flat_map(|node| node.base.children_recursive(&stream))
+        .chain(
+            stream
+                .objects_of_type::<NiCollisionSwitch>()
+                .flat_map(|node| node.base.children_recursive(&stream)),
+        )
+        .map(|link| link.key)
+        .collect::<HashSet<_>>();
+
     for entity in loaded_meshes.iter() {
         commands.entity(entity).despawn();
     }
 
     let mut shape_count = 0;
-    for shape in stream.objects_of_type::<NiTriShape>() {
+    for (shape_link, shape) in stream.objects_of_type_with_link::<NiTriShape>() {
         let Some(data) = stream.get_as::<_, NiTriShapeData>(shape.base.base.geometry_data) else {
             continue;
         };
@@ -165,6 +215,7 @@ pub fn load_nif(
             .iter()
             .map(|color| [color.x, color.y, color.z, color.w])
             .collect::<Vec<_>>();
+        let has_vertex_colors = colors.len() == data.base.base.vertices.len();
 
         let mut mesh = Mesh::new(
             bevy::render::render_resource::PrimitiveTopology::TriangleList,
@@ -172,13 +223,13 @@ pub fn load_nif(
         );
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         if normals.len() == data.base.base.vertices.len() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
         }
         if uvs.len() == data.base.base.vertices.len() {
             mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         }
-        if colors.len() == mesh.count_vertices() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        if has_vertex_colors {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors.clone());
         }
         mesh.insert_indices(bevy::render::mesh::Indices::U16(indices));
 
@@ -194,10 +245,8 @@ pub fn load_nif(
             scale: Vec3::splat(av_object.scale), // Scale down by 0.01 to convert from centimeters to meters
         };
 
-        let mut material = StandardMaterial {
-            unlit: true,
-            ..Default::default()
-        };
+        let mut material = material_for_view_mode(view_mode, has_vertex_colors);
+        let mut diffuse_texture = None;
 
         // Find NiStencilProperty as a child of this NiTriShape, if it exists
         if let Some(stencil_property) = shape
@@ -232,7 +281,9 @@ pub fn load_nif(
             });
         }
 
-        if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
+        if matches!(view_mode, crate::ViewMode::Lit | crate::ViewMode::Unlit)
+            && let Some(texture_path) = diffuse_texture_path(&stream, shape)
+        {
             if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
                 let extension = texture_path
                     .rsplit('.')
@@ -259,7 +310,9 @@ pub fn load_nif(
                     bevy::asset::RenderAssetUsages::default(),
                 ) {
                     Ok(image) => {
-                        material.base_color_texture = Some(images.add(image));
+                        let texture = images.add(image);
+                        material.base_color_texture = Some(texture.clone());
+                        diffuse_texture = Some(texture);
                     }
                     Err(error) => {
                         bevy::log::warn!(
@@ -272,11 +325,54 @@ pub fn load_nif(
             }
         }
 
+        let default_mesh = meshes.add(mesh.clone());
+        let mut vertex_color_mesh = mesh.clone();
+        if !has_vertex_colors {
+            vertex_color_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_COLOR,
+                vec![[1.0, 1.0, 1.0, 1.0]; vertex_color_mesh.count_vertices()],
+            );
+        }
+        let vertex_color_mesh = meshes.add(vertex_color_mesh);
+        let mut normal_mesh = mesh;
+        let normal_colors = normals
+            .iter()
+            .map(|normal| {
+                [
+                    normal[0] * 0.5 + 0.5,
+                    normal[1] * 0.5 + 0.5,
+                    normal[2] * 0.5 + 0.5,
+                    1.0,
+                ]
+            })
+            .collect::<Vec<_>>();
+        if normal_colors.len() == normal_mesh.count_vertices() {
+            normal_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, normal_colors);
+        } else {
+            normal_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_COLOR,
+                vec![[0.5, 0.5, 1.0, 1.0]; normal_mesh.count_vertices()],
+            );
+        }
+        let normal_mesh = meshes.add(normal_mesh);
+        let loaded_mesh = LoadedNifMesh {
+            default_mesh,
+            vertex_color_mesh,
+            normal_mesh,
+            diffuse_texture,
+            is_collision: collision_shapes.contains(&shape_link.key),
+        };
+
         commands.spawn((
-            Mesh3d(meshes.add(mesh)),
+            Mesh3d(mesh_handle_for_view_mode(&loaded_mesh, view_mode)),
             MeshMaterial3d(materials.add(material)),
             transform,
-            LoadedNifMesh,
+            if view_mode == crate::ViewMode::Collision && !loaded_mesh.is_collision {
+                Visibility::Hidden
+            } else {
+                Visibility::Inherited
+            },
+            loaded_mesh,
         ));
         shape_count += 1;
     }
@@ -287,6 +383,87 @@ pub fn load_nif(
 
     bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {file_name}");
     Ok(())
+}
+
+pub fn apply_view_mode(
+    view_mode: crate::ViewMode,
+    materials: &mut Assets<StandardMaterial>,
+    loaded_meshes: &mut Query<
+        (&mut Mesh3d, &MeshMaterial3d<StandardMaterial>, &mut Visibility, &LoadedNifMesh),
+    >,
+) {
+    for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_meshes.iter_mut() {
+        mesh.0 = mesh_handle_for_view_mode(loaded_mesh, view_mode);
+        *visibility = if view_mode == crate::ViewMode::Collision && !loaded_mesh.is_collision {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
+            match view_mode {
+                crate::ViewMode::Lit => {
+                    material.unlit = false;
+                    material.base_color_texture = loaded_mesh.diffuse_texture.clone();
+                }
+                crate::ViewMode::Unlit => {
+                    material.unlit = true;
+                    material.base_color_texture = loaded_mesh.diffuse_texture.clone();
+                }
+                crate::ViewMode::VertexColors => {
+                    material.unlit = true;
+                    material.base_color = Color::WHITE;
+                    material.base_color_texture = None;
+                }
+                crate::ViewMode::Normals => {
+                    material.unlit = true;
+                    material.base_color = Color::srgb(0.5, 0.5, 1.0);
+                    material.base_color_texture = None;
+                }
+                crate::ViewMode::Collision => {
+                    material.unlit = true;
+                    material.base_color = Color::srgb(0.9, 0.2, 0.1);
+                    material.base_color_texture = None;
+                }
+            }
+        }
+    }
+}
+
+fn mesh_handle_for_view_mode(loaded_mesh: &LoadedNifMesh, view_mode: crate::ViewMode) -> Handle<Mesh> {
+    match view_mode {
+        crate::ViewMode::VertexColors => loaded_mesh.vertex_color_mesh.clone(),
+        crate::ViewMode::Normals => loaded_mesh.normal_mesh.clone(),
+        _ => loaded_mesh.default_mesh.clone(),
+    }
+}
+
+fn material_for_view_mode(view_mode: crate::ViewMode, has_vertex_colors: bool) -> StandardMaterial {
+    match view_mode {
+        crate::ViewMode::Lit => StandardMaterial::default(),
+        crate::ViewMode::Unlit => StandardMaterial {
+            unlit: true,
+            ..Default::default()
+        },
+        crate::ViewMode::VertexColors => StandardMaterial {
+            unlit: true,
+            base_color: if has_vertex_colors {
+                Color::WHITE
+            } else {
+                Color::srgb(0.45, 0.45, 0.45)
+            },
+            ..Default::default()
+        },
+        crate::ViewMode::Normals => StandardMaterial {
+            unlit: true,
+            base_color: Color::srgb(0.5, 0.5, 1.0),
+            ..Default::default()
+        },
+        crate::ViewMode::Collision => StandardMaterial {
+            unlit: true,
+            base_color: Color::srgb(0.9, 0.2, 0.1),
+            ..Default::default()
+        },
+    }
 }
 
 pub fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<String> {
