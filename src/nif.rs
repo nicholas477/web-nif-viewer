@@ -9,8 +9,9 @@ use bevy_egui::egui;
 use bevy_panorbit_camera::PanOrbitCamera;
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream, NiTexturingProperty,
-    NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap, TextureSource,
+    AlphaTestFunction, NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream,
+    NiTexturingProperty, NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap,
+    TextureSource,
 };
 
 #[derive(Component)]
@@ -108,7 +109,7 @@ pub fn load_nif(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<crate::PhongMaterial>,
     loaded_meshes: &Query<Entity, With<LoadedNifMesh>>,
     loaded_wireframes: &Query<Entity, With<LoadedNifWireframe>>,
 ) -> Result<(), String> {
@@ -257,7 +258,13 @@ pub fn load_nif(
             scale: Vec3::splat(av_object.scale), // Scale down by 0.01 to convert from centimeters to meters
         };
 
-        let mut material = StandardMaterial::default();
+        let mut material = crate::PhongMaterial {
+            color: LinearRgba::WHITE,
+            color_texture: None,
+            settings: Vec4::ZERO,
+            alpha_mode: AlphaMode::Opaque,
+            cull_mode: Some(wgpu_types::Face::Back),
+        };
         let mut diffuse_texture = None;
 
         // Find NiStencilProperty as a child of this NiTriShape, if it exists
@@ -267,15 +274,11 @@ pub fn load_nif(
             .base
             .get_property::<NiStencilProperty>(&stream)
         {
-            // Placeholder for any logic that might use the stencil property
-            bevy::log::info!("Found NiStencilProperty for shape: {:?}", stencil_property);
-
-            // Regular direction with bevy is CCW
             material.cull_mode = match stencil_property.draw_mode {
                 tes3::nif::DrawMode::Clockwise => Some(wgpu_types::Face::Front),
                 tes3::nif::DrawMode::Both => None,
                 _ => Some(wgpu_types::Face::Back),
-            }
+            };
         }
 
         if let Some(alpha_property) = shape
@@ -284,13 +287,13 @@ pub fn load_nif(
             .base
             .get_property::<tes3::nif::NiAlphaProperty>(&stream)
         {
-            alpha_property.alpha_blending().then(|| {
+            if alpha_property.alpha_blending() {
                 material.alpha_mode = AlphaMode::Blend;
-            });
-
-            alpha_property.alpha_testing().then(|| {
-                material.alpha_mode = AlphaMode::Mask(0.5);
-            });
+            }
+            if alpha_property.alpha_testing() {
+                material.settings.w = alpha_test_settings(alpha_property.test_mode(), alpha_property.test_ref);
+                material.alpha_mode = AlphaMode::Mask(0.0);
+            }
         }
 
         if let Some(texture_path) = diffuse_texture_path(&stream, shape)
@@ -322,7 +325,7 @@ pub fn load_nif(
                 ) {
                     Ok(image) => {
                         let texture = images.add(image);
-                        material.base_color_texture = Some(texture.clone());
+                        material.color_texture = Some(texture.clone());
                         diffuse_texture = Some(texture);
                     }
                     Err(error) => {
@@ -396,7 +399,7 @@ pub fn load_nif(
         ));
         commands.spawn((
             Mesh3d(meshes.add(wireframe_mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial { unlit: true, base_color: Color::BLACK, ..Default::default() })),
+            MeshMaterial3d(materials.add(crate::PhongMaterial { color: LinearRgba::BLACK, color_texture: None, settings: Vec4::new(0.0, 0.0, 1.0, 0.0), alpha_mode: AlphaMode::Opaque, cull_mode: Some(wgpu_types::Face::Back) })),
             transform,
             if view_options.wireframe { base_visibility } else { Visibility::Hidden },
             LoadedNifWireframe { is_collision },
@@ -414,9 +417,9 @@ pub fn load_nif(
 
 pub fn apply_view_options(
     view_options: crate::ViewOptions,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<crate::PhongMaterial>,
     loaded_meshes: &mut Query<
-        (&mut Mesh3d, &MeshMaterial3d<StandardMaterial>, &mut Visibility, &LoadedNifMesh),
+        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &LoadedNifMesh),
         Without<LoadedNifWireframe>,
     >,
     wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
@@ -445,14 +448,36 @@ fn mesh_handle_for_options(view_options: crate::ViewOptions, loaded_mesh: &Loade
     }
 }
 
-fn apply_material_options(material: &mut StandardMaterial, view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) {
-    material.unlit = view_options.shading_mode != crate::ShadingMode::Lit || view_options.vertex_colors == crate::DisplayMode::Only;
-    material.base_color = Color::WHITE;
-    material.base_color_texture = if matches!(view_options.shading_mode, crate::ShadingMode::Normals) || view_options.vertex_colors == crate::DisplayMode::Only {
-        None
-    } else {
+fn apply_material_options(material: &mut crate::PhongMaterial, view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) {
+    let use_vertex_colors = view_options.shading_mode == crate::ShadingMode::Normals
+        || view_options.vertex_colors != crate::DisplayMode::Off;
+    let use_texture = !matches!(view_options.shading_mode, crate::ShadingMode::Normals)
+        && view_options.vertex_colors != crate::DisplayMode::Only;
+    let unlit = view_options.shading_mode != crate::ShadingMode::Lit
+        || view_options.vertex_colors == crate::DisplayMode::Only;
+    material.color = LinearRgba::WHITE;
+    material.color_texture = if use_texture {
         loaded_mesh.diffuse_texture.clone()
+    } else {
+        None
     };
+    material.settings.x = use_texture as u32 as f32;
+    material.settings.y = use_vertex_colors as u32 as f32;
+    material.settings.z = unlit as u32 as f32;
+}
+
+fn alpha_test_settings(test_function: AlphaTestFunction, test_ref: u8) -> f32 {
+    let function = match test_function {
+        AlphaTestFunction::Less => 1,
+        AlphaTestFunction::Equal => 2,
+        AlphaTestFunction::LessEqual => 3,
+        AlphaTestFunction::Greater => 4,
+        AlphaTestFunction::NotEqual => 5,
+        AlphaTestFunction::GreaterEqual => 6,
+        AlphaTestFunction::Never => 7,
+        AlphaTestFunction::Always => 0,
+    };
+    function as f32 + f32::from(test_ref) / 256.0
 }
 
 fn visibility_for(display_mode: crate::DisplayMode, is_collision: bool) -> Visibility {

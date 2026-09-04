@@ -59,10 +59,10 @@ pub fn ui_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::PhongMaterial>>,
     loaded_meshes: Query<Entity, With<nif::LoadedNifMesh>>,
     mut loaded_materials: Query<
-        (&mut Mesh3d, &MeshMaterial3d<StandardMaterial>, &mut Visibility, &nif::LoadedNifMesh),
+        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &nif::LoadedNifMesh),
         Without<nif::LoadedNifWireframe>,
     >,
     mut loaded_wireframes: Query<
@@ -420,16 +420,32 @@ fn draw_nif_inspector(
     sorted_file_names.sort_unstable();
     let mut clicked_file = None;
 
-    egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
-        for file_name in sorted_file_names {
-            let is_selected = state.selected_file.as_deref() == Some(file_name.as_str());
+    let file_list_width = ui.available_width();
+    let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
+    egui::Resize::default()
+        .id_salt("file_list_resize")
+        .default_width(file_list_width)
+        .default_height(180.0)
+        .min_width(file_list_width)
+        .min_height(72.0)
+        .max_width(file_list_width)
+        .max_height(file_list_max_height)
+        .resizable([false, true])
+        .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("file_list_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for file_name in sorted_file_names {
+                        let is_selected = state.selected_file.as_deref() == Some(file_name.as_str());
 
-            if ui.selectable_label(is_selected, &file_name).clicked() {
-                state.selected_file = Some(file_name.clone());
-                clicked_file = Some(file_name);
-            }
-        }
-    });
+                        if ui.selectable_label(is_selected, &file_name).clicked() {
+                            state.selected_file = Some(file_name.clone());
+                            clicked_file = Some(file_name);
+                        }
+                    }
+                });
+        });
 
     if !state.nif_objects.is_empty() {
         ui.add_space(12.0);
