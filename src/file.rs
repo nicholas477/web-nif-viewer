@@ -6,17 +6,24 @@ use std::{
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::Response;
+use web_sys::{File, FormData, Request, RequestInit, Response, Url};
 use zip::ZipArchive;
 
 pub type FS = Arc<RwLock<HashMap<String, Vec<u8>>>>;
 pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;
+
+const UPLOAD_URL: &str = "https://files.nif.cactus.vg/upload";
 
 #[derive(Debug)]
 pub enum FileError {
     FetchError(String),
     UnzipError(String),
     IoError(io::Error),
+}
+
+#[derive(serde::Deserialize)]
+struct UploadResponse {
+    url: String,
 }
 
 // 1. Implement Display to define how errors print to users
@@ -40,6 +47,7 @@ impl std::error::Error for FileError {
     }
 }
 
+
 #[wasm_bindgen]
 pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     let window = web_sys::window().ok_or("no global window found")?;
@@ -56,6 +64,56 @@ pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     let zip_bytes: Vec<u8> = type_array.to_vec();
 
     Ok(zip_bytes)
+}
+
+pub async fn upload_file(
+    file: File,
+    status: &Arc<RwLock<crate::UploadStatus>>,
+) -> Result<String, FileError> {
+    status.write().unwrap().phase = Some(format!("Uploading {}...", file.name()));
+
+    let form_data = FormData::new().map_err(|error| FileError::FetchError(format!("{error:?}")))?;
+    form_data
+        .append_with_blob_and_filename("file", &file, &file.name())
+        .map_err(|error| FileError::FetchError(format!("{error:?}")))?;
+
+    let request_init = RequestInit::new();
+    request_init.set_method("POST");
+    request_init.set_body(&form_data);
+    let request = Request::new_with_str_and_init(UPLOAD_URL, &request_init)
+        .map_err(|error| FileError::FetchError(format!("{error:?}")))?;
+    let window = web_sys::window().ok_or_else(|| FileError::FetchError("no global window found".to_string()))?;
+    let response: Response = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|error| FileError::FetchError(format!("{error:?}")))?
+        .dyn_into()
+        .map_err(|error| FileError::FetchError(format!("{error:?}")))?;
+
+    if !response.ok() {
+        return Err(FileError::FetchError(format!(
+            "Upload failed with HTTP status {}",
+            response.status()
+        )));
+    }
+
+    let response_url = response.url();
+    let response_text = JsFuture::from(
+        response
+            .text()
+            .map_err(|error| FileError::FetchError(format!("{error:?}")))?,
+    )
+    .await
+    .map_err(|error| FileError::FetchError(format!("{error:?}")))?
+    .as_string()
+    .ok_or_else(|| FileError::FetchError("Upload returned an empty response body".to_string()))?;
+    let upload_response: UploadResponse = serde_json::from_str(&response_text)
+        .map_err(|error| FileError::FetchError(format!("Invalid upload response: {error}")))?;
+    let download_url = Url::new_with_base(&upload_response.url, &response_url)
+        .map_err(|error| FileError::FetchError(format!("Invalid upload URL: {error:?}")))?
+        .href();
+
+    status.write().unwrap().phase = None;
+    Ok(download_url)
 }
 
 // Your previous code modified slightly to yield standard errors if desired
@@ -77,11 +135,8 @@ pub async fn fetch_and_unzip(
 
     // Iterate through each file inside the ZIP
     for i in 0..archive.len() {
-        status.write().unwrap().phase = Some(format!(
-            "Extracting files... {}/{}",
-            i + 1,
-            archive.len()
-        ));
+        status.write().unwrap().phase =
+            Some(format!("Extracting files... {}/{}", i + 1, archive.len()));
         let mut file = archive
             .by_index(i)
             .map_err(|e| FileError::UnzipError(format!("{:?}", e)))?;

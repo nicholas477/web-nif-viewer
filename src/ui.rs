@@ -1,10 +1,11 @@
 use crate::nif;
+use std::sync::{Arc, RwLock};
 use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use bevy_panorbit_camera::PanOrbitCamera;
 use egui::{LayerId, Ui, UiBuilder};
 
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 
 const ZIP_QUERY_PARAMETER: &str = "zip";
@@ -82,6 +83,11 @@ pub fn ui_system(
     let window: &mut Window = window.into_inner().into_inner();
     let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
+    let uploaded_download_url = state.upload_status.write().unwrap().download_url.take();
+    if let Some(download_url) = uploaded_download_url {
+        start_archive_load(&mut state, download_url, None);
+    }
+
     if let Some(pending_file) = state.pending_file.clone()
         && file_names
             .iter()
@@ -142,6 +148,9 @@ pub fn ui_system(
                 if ui.button("Open File").clicked() {
                     state.show_zip_popup = true;
                 }
+                if ui.button("Upload File").clicked() {
+                    open_upload_picker(state.upload_status.clone());
+                }
                 draw_recent_menu(ui, &mut state);
             });
         })
@@ -166,7 +175,9 @@ pub fn ui_system(
     }
 
     draw_load_status(ctx, &state);
+    draw_upload_status(ctx, &state);
     draw_error_popup(ctx, &mut state);
+    draw_upload_result_popup(ctx, &mut state);
 
     Ok(())
 }
@@ -191,7 +202,12 @@ fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
 
 fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
     let archive_error = state.archive_load_status.read().unwrap().error.clone();
-    let error = state.nif_load_error.clone().or(archive_error);
+    let upload_error = state.upload_status.read().unwrap().error.clone();
+    let error = state
+        .nif_load_error
+        .clone()
+        .or(archive_error)
+        .or(upload_error);
     let Some(error) = error else {
         return;
     };
@@ -206,8 +222,101 @@ fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
             if ui.button("Close").clicked() {
                 state.nif_load_error = None;
                 state.archive_load_status.write().unwrap().error = None;
+                state.upload_status.write().unwrap().error = None;
             }
         });
+}
+
+fn draw_upload_status(ctx: &egui::Context, state: &crate::UIState) {
+    let status = state.upload_status.read().unwrap();
+    let Some(phase) = status.phase.as_deref() else {
+        return;
+    };
+
+    egui::Area::new("upload_status".into())
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -56.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Spinner::new());
+                    ui.label(phase);
+                });
+            });
+        });
+}
+
+fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState) {
+    let success = state.upload_status.read().unwrap().success.clone();
+    let Some(success) = success else {
+        return;
+    };
+
+    egui::Window::new("Upload Complete")
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.label(success);
+            ui.add_space(8.0);
+            if ui.button("Close").clicked() {
+                state.upload_status.write().unwrap().success = None;
+            }
+        });
+}
+
+fn open_upload_picker(status: Arc<RwLock<crate::UploadStatus>>) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    let Ok(element) = document.create_element("input") else {
+        return;
+    };
+    let Ok(input) = element.dyn_into::<web_sys::HtmlInputElement>()
+    else {
+        return;
+    };
+    input.set_type("file");
+    input.set_accept(".zip,application/zip");
+
+    let on_change = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        let Some(input) = event
+            .target()
+            .and_then(|target| target.dyn_into::<web_sys::HtmlInputElement>().ok())
+        else {
+            return;
+        };
+        let Some(file) = input.files().and_then(|files| files.get(0)) else {
+            return;
+        };
+
+        let status = status.clone();
+        {
+            let mut status = status.write().unwrap();
+            status.phase = Some("Preparing upload...".to_string());
+            status.error = None;
+            status.success = None;
+        }
+        spawn_local(async move {
+            match crate::file::upload_file(file, &status).await {
+                Ok(download_url) => {
+                    let mut status = status.write().unwrap();
+                    status.success = Some("Upload complete. Opening archive...".to_string());
+                    status.download_url = Some(download_url);
+                }
+                Err(error) => {
+                    let mut status = status.write().unwrap();
+                    status.phase = None;
+                    status.error = Some(error.to_string());
+                }
+            }
+        });
+    }) as Box<dyn FnMut(_)>);
+    input.set_onchange(Some(on_change.as_ref().unchecked_ref()));
+    on_change.forget();
+    input.click();
 }
 
 fn draw_recent_menu(ui: &mut Ui, state: &mut crate::UIState) {

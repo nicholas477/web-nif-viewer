@@ -23,6 +23,14 @@ pub struct ArchiveLoadStatus {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Default)]
+pub struct UploadStatus {
+    pub phase: Option<String>,
+    pub error: Option<String>,
+    pub success: Option<String>,
+    pub download_url: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct RecentFile {
     pub zip_url: String,
@@ -38,6 +46,7 @@ pub struct UIState {
     pub pending_file: Option<String>,
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
     pub nif_load_error: Option<String>,
+    pub upload_status: Arc<RwLock<UploadStatus>>,
 }
 
 fn main() {
