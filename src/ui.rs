@@ -59,8 +59,17 @@ pub fn ui_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::PhongMaterial>>,
     loaded_meshes: Query<Entity, With<nif::LoadedNifMesh>>,
+    mut loaded_materials: Query<
+        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &nif::LoadedNifMesh),
+        Without<nif::LoadedNifWireframe>,
+    >,
+    mut loaded_wireframes: Query<
+        (&mut Visibility, &nif::LoadedNifWireframe),
+        Without<nif::LoadedNifMesh>,
+    >,
+    loaded_wireframe_entities: Query<Entity, With<nif::LoadedNifWireframe>>,
     mut state: ResMut<crate::UIState>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
@@ -96,16 +105,32 @@ pub fn ui_system(
     {
         state.pending_file = None;
         state.selected_file = Some(pending_file.clone());
+        let file_system = state.file_system.clone();
+        let view_options = crate::ViewOptions::from(&*state);
 
-        if let Err(error) = nif::load_nif(
-            &pending_file,
-            &state.file_system,
-            &mut commands,
-            &mut meshes,
-            &mut images,
-            &mut materials,
-            &loaded_meshes,
-        ) {
+        let load_result = {
+            let crate::UIState {
+                nif_objects,
+                nif_roots,
+                triangle_count,
+                ..
+            } = &mut *state;
+            nif::load_nif(
+                &pending_file,
+                &file_system,
+                nif_objects,
+                nif_roots,
+                triangle_count,
+                view_options,
+                &mut commands,
+                &mut meshes,
+                &mut images,
+                &mut materials,
+                &loaded_meshes,
+                &loaded_wireframe_entities,
+            )
+        };
+        if let Err(error) = load_result {
             state.nif_load_error = Some(error);
         } else {
             record_recent_file(&state.zip_url_input, &pending_file);
@@ -117,7 +142,7 @@ pub fn ui_system(
         .default_size(400.0)
         .resizable(true)
         .show(&mut viewport_ui, |ui| {
-            draw_file_selector(ui, &file_names, &mut state.selected_file)
+            draw_nif_inspector(ui, &file_names, &mut state)
         });
     let mut left = left_panel.response.rect.width();
 
@@ -125,15 +150,31 @@ pub fn ui_system(
         && file_name.to_lowercase().ends_with(".nif")
     {
         update_query(&state.zip_url_input, Some(&file_name));
-        if let Err(error) = nif::load_nif(
-            &file_name,
-            &state.file_system,
-            &mut commands,
-            &mut meshes,
-            &mut images,
-            &mut materials,
-            &loaded_meshes,
-        ) {
+        let file_system = state.file_system.clone();
+        let view_options = crate::ViewOptions::from(&*state);
+        let load_result = {
+            let crate::UIState {
+                nif_objects,
+                nif_roots,
+                triangle_count,
+                ..
+            } = &mut *state;
+            nif::load_nif(
+                &file_name,
+                &file_system,
+                nif_objects,
+                nif_roots,
+                triangle_count,
+                view_options,
+                &mut commands,
+                &mut meshes,
+                &mut images,
+                &mut materials,
+                &loaded_meshes,
+                &loaded_wireframe_entities,
+            )
+        };
+        if let Err(error) = load_result {
             state.nif_load_error = Some(error);
         } else {
             record_recent_file(&state.zip_url_input, &file_name);
@@ -152,6 +193,31 @@ pub fn ui_system(
                     open_upload_picker(state.upload_status.clone());
                 }
                 draw_recent_menu(ui, &mut state);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_options = crate::ViewOptions::from(&*state);
+                    ui.label(format!("{} triangles", state.triangle_count));
+                    ui.checkbox(&mut state.wireframe, "Wireframe");
+                    egui::ComboBox::from_label("Collision")
+                        .selected_text(state.collision.label())
+                        .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.collision, mode, mode.label()); });
+                    ui.add_enabled_ui(state.shading_mode != crate::ShadingMode::Normals, |ui| {
+                        egui::ComboBox::from_label("Vertex colors")
+                            .selected_text(state.vertex_colors.label())
+                            .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.vertex_colors, mode, mode.label()); });
+                    });
+                    for mode in [crate::ShadingMode::Normals, crate::ShadingMode::Unlit, crate::ShadingMode::Lit] {
+                        ui.selectable_value(&mut state.shading_mode, mode, mode.label());
+                    }
+                    let view_options = crate::ViewOptions::from(&*state);
+                    if view_options != previous_options {
+                        nif::apply_view_options(
+                            view_options,
+                            &mut materials,
+                            &mut loaded_materials,
+                            &mut loaded_wireframes,
+                        );
+                    }
+                });
             });
         })
         .response
@@ -337,10 +403,10 @@ fn draw_recent_menu(ui: &mut Ui, state: &mut crate::UIState) {
     });
 }
 
-fn draw_file_selector(
+fn draw_nif_inspector(
     ui: &mut Ui,
     file_names: &[String],
-    selected_file: &mut Option<String>,
+    state: &mut crate::UIState,
 ) -> Option<String> {
     ui.heading("Files");
     ui.separator();
@@ -354,18 +420,69 @@ fn draw_file_selector(
     sorted_file_names.sort_unstable();
     let mut clicked_file = None;
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for file_name in sorted_file_names {
-            let is_selected = selected_file.as_deref() == Some(file_name.as_str());
+    let file_list_width = ui.available_width();
+    let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
+    egui::Resize::default()
+        .id_salt("file_list_resize")
+        .default_width(file_list_width)
+        .default_height(180.0)
+        .min_width(file_list_width)
+        .min_height(72.0)
+        .max_width(file_list_width)
+        .max_height(file_list_max_height)
+        .resizable([false, true])
+        .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("file_list_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for file_name in sorted_file_names {
+                        let is_selected = state.selected_file.as_deref() == Some(file_name.as_str());
 
-            if ui.selectable_label(is_selected, &file_name).clicked() {
-                *selected_file = Some(file_name.clone());
-                clicked_file = Some(file_name);
-            }
-        }
-    });
+                        if ui.selectable_label(is_selected, &file_name).clicked() {
+                            state.selected_file = Some(file_name.clone());
+                            clicked_file = Some(file_name);
+                        }
+                    }
+                });
+        });
+
+    if !state.nif_objects.is_empty() {
+        ui.add_space(12.0);
+        ui.heading("NIF Inspector");
+        ui.separator();
+        let inspector_size = egui::vec2(ui.available_width(), ui.available_height());
+        ui.allocate_ui_with_layout(
+            inspector_size,
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("nif_inspector_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for &root in &state.nif_roots {
+                            draw_nif_object(ui, &state.nif_objects, root);
+                        }
+                    });
+            });
+    }
 
     clicked_file
+}
+
+fn draw_nif_object(ui: &mut Ui, objects: &[crate::NifObjectInfo], index: usize) {
+    let Some(object) = objects.get(index) else {
+        return;
+    };
+
+    egui::CollapsingHeader::new(format!("{index}: {}", object.type_name))
+        .id_salt(index)
+        .show(ui, |ui| {
+            ui.code(&object.fields);
+            for &child in &object.children {
+                draw_nif_object(ui, objects, child);
+            }
+        });
 }
 
 fn query_state() -> Option<(String, Option<String>)> {
