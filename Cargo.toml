@@ -41,7 +41,9 @@ features = [
     "webgl2",                # Web: use WebGL2 instead of WebGPU
 
     # Asset File Format Support
+    "bmp",
     "dds",
+    "tga",
 ]
 
 [dependencies.web-sys]
