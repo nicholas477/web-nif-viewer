@@ -12,10 +12,18 @@ const FILE_QUERY_PARAMETER: &str = "file";
 const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
 const MAX_RECENT_FILES: usize = 10;
 
+const DEFAULT_MESH: (&str, Option<&str>) = (
+    "https://github.com/nicholas477/web-nif-viewer/raw/refs/heads/gh-pages/assets/tr_mw_flora_tree_indoril_elm.zip",
+    Some("meshes\\tr\\f\\tr_f_indoril_elm_01.nif"),
+);
+
 pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
-    let Some((zip_url, selected_file)) = query_state() else {
-        return;
-    };
+    let (zip_url, selected_file) = query_state().unwrap_or_else(|| {
+        let zip_url = DEFAULT_MESH.0.to_string();
+        let selected_file = DEFAULT_MESH.1.map(|s| s.to_string());
+
+        (zip_url, selected_file)
+    });
 
     state.zip_url_input = zip_url.clone();
     state.pending_file = selected_file;
@@ -254,6 +262,7 @@ fn draw_file_selector(
 fn query_state() -> Option<(String, Option<String>)> {
     let window = web_sys::window()?;
     let search = window.location().search().ok()?;
+
     let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
     let zip_url = params.get(ZIP_QUERY_PARAMETER)?;
 
