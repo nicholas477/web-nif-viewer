@@ -13,7 +13,7 @@ const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
 const MAX_RECENT_FILES: usize = 10;
 
 const DEFAULT_MESH: (&str, Option<&str>) = (
-    "https://nicholas477.github.io/web-nif-viewer/assets/tr_mw_flora_tree_indoril_elm.zip",
+    "assets/tr_mw_flora_tree_indoril_elm.zip",
     Some("meshes\\tr\\f\\tr_f_indoril_elm_01.nif"),
 );
 
