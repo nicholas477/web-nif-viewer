@@ -38,31 +38,58 @@ pub struct RecentFile {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ViewMode {
+pub enum ShadingMode {
     Lit,
     #[default]
     Unlit,
-    VertexColors,
     Normals,
-    Collision,
 }
 
-impl ViewMode {
-    pub const ALL: [Self; 5] = [
-        Self::Lit,
-        Self::Unlit,
-        Self::VertexColors,
-        Self::Normals,
-        Self::Collision,
-    ];
-
+impl ShadingMode {
     pub fn label(self) -> &'static str {
         match self {
             Self::Lit => "Lit",
             Self::Unlit => "Unlit",
-            Self::VertexColors => "Vertex colors",
             Self::Normals => "Normals",
-            Self::Collision => "Collision",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DisplayMode {
+    #[default]
+    Off,
+    On,
+    Only,
+}
+
+impl DisplayMode {
+    pub const ALL: [Self; 3] = [Self::Off, Self::On, Self::Only];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::On => "On",
+            Self::Only => "Only",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ViewOptions {
+    pub shading_mode: ShadingMode,
+    pub vertex_colors: DisplayMode,
+    pub collision: DisplayMode,
+    pub wireframe: bool,
+}
+
+impl From<&UIState> for ViewOptions {
+    fn from(state: &UIState) -> Self {
+        Self {
+            shading_mode: state.shading_mode,
+            vertex_colors: state.vertex_colors,
+            collision: state.collision,
+            wireframe: state.wireframe,
         }
     }
 }
@@ -86,7 +113,11 @@ pub struct UIState {
     pub upload_status: Arc<RwLock<UploadStatus>>,
     pub nif_objects: Vec<NifObjectInfo>,
     pub nif_roots: Vec<usize>,
-    pub view_mode: ViewMode,
+    pub triangle_count: usize,
+    pub shading_mode: ShadingMode,
+    pub vertex_colors: DisplayMode,
+    pub collision: DisplayMode,
+    pub wireframe: bool,
 }
 
 fn main() {

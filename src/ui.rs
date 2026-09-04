@@ -63,7 +63,13 @@ pub fn ui_system(
     loaded_meshes: Query<Entity, With<nif::LoadedNifMesh>>,
     mut loaded_materials: Query<
         (&mut Mesh3d, &MeshMaterial3d<StandardMaterial>, &mut Visibility, &nif::LoadedNifMesh),
+        Without<nif::LoadedNifWireframe>,
     >,
+    mut loaded_wireframes: Query<
+        (&mut Visibility, &nif::LoadedNifWireframe),
+        Without<nif::LoadedNifMesh>,
+    >,
+    loaded_wireframe_entities: Query<Entity, With<nif::LoadedNifWireframe>>,
     mut state: ResMut<crate::UIState>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
@@ -100,12 +106,13 @@ pub fn ui_system(
         state.pending_file = None;
         state.selected_file = Some(pending_file.clone());
         let file_system = state.file_system.clone();
-        let view_mode = state.view_mode;
+        let view_options = crate::ViewOptions::from(&*state);
 
         let load_result = {
             let crate::UIState {
                 nif_objects,
                 nif_roots,
+                triangle_count,
                 ..
             } = &mut *state;
             nif::load_nif(
@@ -113,12 +120,14 @@ pub fn ui_system(
                 &file_system,
                 nif_objects,
                 nif_roots,
-                view_mode,
+                triangle_count,
+                view_options,
                 &mut commands,
                 &mut meshes,
                 &mut images,
                 &mut materials,
                 &loaded_meshes,
+                &loaded_wireframe_entities,
             )
         };
         if let Err(error) = load_result {
@@ -142,11 +151,12 @@ pub fn ui_system(
     {
         update_query(&state.zip_url_input, Some(&file_name));
         let file_system = state.file_system.clone();
-        let view_mode = state.view_mode;
+        let view_options = crate::ViewOptions::from(&*state);
         let load_result = {
             let crate::UIState {
                 nif_objects,
                 nif_roots,
+                triangle_count,
                 ..
             } = &mut *state;
             nif::load_nif(
@@ -154,12 +164,14 @@ pub fn ui_system(
                 &file_system,
                 nif_objects,
                 nif_roots,
-                view_mode,
+                triangle_count,
+                view_options,
                 &mut commands,
                 &mut meshes,
                 &mut images,
                 &mut materials,
                 &loaded_meshes,
+                &loaded_wireframe_entities,
             )
         };
         if let Err(error) = load_result {
@@ -182,15 +194,27 @@ pub fn ui_system(
                 }
                 draw_recent_menu(ui, &mut state);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let previous_view_mode = state.view_mode;
-                    for view_mode in crate::ViewMode::ALL.into_iter().rev() {
-                        ui.selectable_value(&mut state.view_mode, view_mode, view_mode.label());
+                    let previous_options = crate::ViewOptions::from(&*state);
+                    ui.label(format!("{} triangles", state.triangle_count));
+                    ui.checkbox(&mut state.wireframe, "Wireframe");
+                    egui::ComboBox::from_label("Collision")
+                        .selected_text(state.collision.label())
+                        .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.collision, mode, mode.label()); });
+                    ui.add_enabled_ui(state.shading_mode != crate::ShadingMode::Normals, |ui| {
+                        egui::ComboBox::from_label("Vertex colors")
+                            .selected_text(state.vertex_colors.label())
+                            .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.vertex_colors, mode, mode.label()); });
+                    });
+                    for mode in [crate::ShadingMode::Normals, crate::ShadingMode::Unlit, crate::ShadingMode::Lit] {
+                        ui.selectable_value(&mut state.shading_mode, mode, mode.label());
                     }
-                    if state.view_mode != previous_view_mode {
-                        nif::apply_view_mode(
-                            state.view_mode,
+                    let view_options = crate::ViewOptions::from(&*state);
+                    if view_options != previous_options {
+                        nif::apply_view_options(
+                            view_options,
                             &mut materials,
                             &mut loaded_materials,
+                            &mut loaded_wireframes,
                         );
                     }
                 });

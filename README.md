@@ -6,10 +6,17 @@
     - Show each node in the nif
     - Show each field in the nif
 - Add an view modes (right side of top bar)
+    (suboptions are not mutually exclusive)
     - [x] Lit
+        - Vertex colors on/off/only
+        - Wireframe
+        - Collision on/off/only
     - [x] Unlit
-    - [x] Vertex colors only
+        - Vertex colors on/off/only
+        - Wireframe
+        - Collision on/off/only
     - [x] Normals
-    - [x] Collision
-    - [x] Wireframe
+        - Wireframe
+        - Collision on/off/only
+        
 - Show tri count somewhere

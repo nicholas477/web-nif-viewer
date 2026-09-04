@@ -15,10 +15,15 @@ use tes3::nif::{
 
 #[derive(Component)]
 pub struct LoadedNifMesh {
-    default_mesh: Handle<Mesh>,
+    uncolored_mesh: Handle<Mesh>,
     vertex_color_mesh: Handle<Mesh>,
     normal_mesh: Handle<Mesh>,
     diffuse_texture: Option<Handle<Image>>,
+    is_collision: bool,
+}
+
+#[derive(Component)]
+pub struct LoadedNifWireframe {
     is_collision: bool,
 }
 
@@ -98,12 +103,14 @@ pub fn load_nif(
     file_system: &crate::file::FS,
     nif_objects: &mut Vec<crate::NifObjectInfo>,
     nif_roots: &mut Vec<usize>,
-    view_mode: crate::ViewMode,
+    triangle_count: &mut usize,
+    view_options: crate::ViewOptions,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     loaded_meshes: &Query<Entity, With<LoadedNifMesh>>,
+    loaded_wireframes: &Query<Entity, With<LoadedNifWireframe>>,
 ) -> Result<(), String> {
     bevy::log::info!("Loading NIF file: {file_name}");
 
@@ -163,8 +170,12 @@ pub fn load_nif(
         )
         .map(|link| link.key)
         .collect::<HashSet<_>>();
+    *triangle_count = 0;
 
     for entity in loaded_meshes.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in loaded_wireframes.iter() {
         commands.entity(entity).despawn();
     }
 
@@ -177,6 +188,7 @@ pub fn load_nif(
         if data.base.base.vertices.is_empty() || data.triangles.is_empty() {
             continue;
         }
+        *triangle_count += data.triangles.len();
 
         let positions = data
             .base
@@ -245,7 +257,7 @@ pub fn load_nif(
             scale: Vec3::splat(av_object.scale), // Scale down by 0.01 to convert from centimeters to meters
         };
 
-        let mut material = material_for_view_mode(view_mode, has_vertex_colors);
+        let mut material = StandardMaterial::default();
         let mut diffuse_texture = None;
 
         // Find NiStencilProperty as a child of this NiTriShape, if it exists
@@ -281,8 +293,7 @@ pub fn load_nif(
             });
         }
 
-        if matches!(view_mode, crate::ViewMode::Lit | crate::ViewMode::Unlit)
-            && let Some(texture_path) = diffuse_texture_path(&stream, shape)
+        if let Some(texture_path) = diffuse_texture_path(&stream, shape)
         {
             if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
                 let extension = texture_path
@@ -325,7 +336,9 @@ pub fn load_nif(
             }
         }
 
-        let default_mesh = meshes.add(mesh.clone());
+        let mut uncolored_mesh = mesh.clone();
+        uncolored_mesh.remove_attribute(Mesh::ATTRIBUTE_COLOR);
+        let uncolored_mesh = meshes.add(uncolored_mesh);
         let mut vertex_color_mesh = mesh.clone();
         if !has_vertex_colors {
             vertex_color_mesh.insert_attribute(
@@ -356,23 +369,37 @@ pub fn load_nif(
         }
         let normal_mesh = meshes.add(normal_mesh);
         let loaded_mesh = LoadedNifMesh {
-            default_mesh,
+            uncolored_mesh,
             vertex_color_mesh,
             normal_mesh,
             diffuse_texture,
             is_collision: collision_shapes.contains(&shape_link.key),
         };
+        let is_collision = loaded_mesh.is_collision;
+        apply_material_options(&mut material, view_options, &loaded_mesh);
+        let base_visibility = visibility_for(view_options.collision, is_collision);
 
         commands.spawn((
-            Mesh3d(mesh_handle_for_view_mode(&loaded_mesh, view_mode)),
+            Mesh3d(mesh_handle_for_options(view_options, &loaded_mesh)),
             MeshMaterial3d(materials.add(material)),
             transform,
-            if view_mode == crate::ViewMode::Collision && !loaded_mesh.is_collision {
-                Visibility::Hidden
-            } else {
-                Visibility::Inherited
-            },
+            base_visibility,
             loaded_mesh,
+        ));
+        let mut wireframe_mesh = Mesh::new(
+            bevy::render::render_resource::PrimitiveTopology::LineList,
+            bevy::asset::RenderAssetUsages::default(),
+        );
+        wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, data.base.base.vertices.iter().map(|vertex| [vertex.x, vertex.y, vertex.z]).collect::<Vec<_>>());
+        wireframe_mesh.insert_indices(bevy::render::mesh::Indices::U16(
+            data.triangles.iter().flat_map(|triangle| [triangle[0], triangle[1], triangle[1], triangle[2], triangle[2], triangle[0]]).collect(),
+        ));
+        commands.spawn((
+            Mesh3d(meshes.add(wireframe_mesh)),
+            MeshMaterial3d(materials.add(StandardMaterial { unlit: true, base_color: Color::BLACK, ..Default::default() })),
+            transform,
+            if view_options.wireframe { base_visibility } else { Visibility::Hidden },
+            LoadedNifWireframe { is_collision },
         ));
         shape_count += 1;
     }
@@ -385,84 +412,54 @@ pub fn load_nif(
     Ok(())
 }
 
-pub fn apply_view_mode(
-    view_mode: crate::ViewMode,
+pub fn apply_view_options(
+    view_options: crate::ViewOptions,
     materials: &mut Assets<StandardMaterial>,
     loaded_meshes: &mut Query<
         (&mut Mesh3d, &MeshMaterial3d<StandardMaterial>, &mut Visibility, &LoadedNifMesh),
+        Without<LoadedNifWireframe>,
     >,
+    wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
 ) {
     for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_meshes.iter_mut() {
-        mesh.0 = mesh_handle_for_view_mode(loaded_mesh, view_mode);
-        *visibility = if view_mode == crate::ViewMode::Collision && !loaded_mesh.is_collision {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
+        mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
+        *visibility = visibility_for(view_options.collision, loaded_mesh.is_collision);
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            match view_mode {
-                crate::ViewMode::Lit => {
-                    material.unlit = false;
-                    material.base_color_texture = loaded_mesh.diffuse_texture.clone();
-                }
-                crate::ViewMode::Unlit => {
-                    material.unlit = true;
-                    material.base_color_texture = loaded_mesh.diffuse_texture.clone();
-                }
-                crate::ViewMode::VertexColors => {
-                    material.unlit = true;
-                    material.base_color = Color::WHITE;
-                    material.base_color_texture = None;
-                }
-                crate::ViewMode::Normals => {
-                    material.unlit = true;
-                    material.base_color = Color::srgb(0.5, 0.5, 1.0);
-                    material.base_color_texture = None;
-                }
-                crate::ViewMode::Collision => {
-                    material.unlit = true;
-                    material.base_color = Color::srgb(0.9, 0.2, 0.1);
-                    material.base_color_texture = None;
-                }
-            }
+            apply_material_options(&mut material, view_options, loaded_mesh);
         }
     }
-}
-
-fn mesh_handle_for_view_mode(loaded_mesh: &LoadedNifMesh, view_mode: crate::ViewMode) -> Handle<Mesh> {
-    match view_mode {
-        crate::ViewMode::VertexColors => loaded_mesh.vertex_color_mesh.clone(),
-        crate::ViewMode::Normals => loaded_mesh.normal_mesh.clone(),
-        _ => loaded_mesh.default_mesh.clone(),
+    for (mut visibility, wireframe) in wireframes.iter_mut() {
+        *visibility = if view_options.wireframe {
+            visibility_for(view_options.collision, wireframe.is_collision)
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
-fn material_for_view_mode(view_mode: crate::ViewMode, has_vertex_colors: bool) -> StandardMaterial {
-    match view_mode {
-        crate::ViewMode::Lit => StandardMaterial::default(),
-        crate::ViewMode::Unlit => StandardMaterial {
-            unlit: true,
-            ..Default::default()
-        },
-        crate::ViewMode::VertexColors => StandardMaterial {
-            unlit: true,
-            base_color: if has_vertex_colors {
-                Color::WHITE
-            } else {
-                Color::srgb(0.45, 0.45, 0.45)
-            },
-            ..Default::default()
-        },
-        crate::ViewMode::Normals => StandardMaterial {
-            unlit: true,
-            base_color: Color::srgb(0.5, 0.5, 1.0),
-            ..Default::default()
-        },
-        crate::ViewMode::Collision => StandardMaterial {
-            unlit: true,
-            base_color: Color::srgb(0.9, 0.2, 0.1),
-            ..Default::default()
-        },
+fn mesh_handle_for_options(view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) -> Handle<Mesh> {
+    match view_options.shading_mode {
+        crate::ShadingMode::Normals => loaded_mesh.normal_mesh.clone(),
+        _ if view_options.vertex_colors != crate::DisplayMode::Off => loaded_mesh.vertex_color_mesh.clone(),
+        _ => loaded_mesh.uncolored_mesh.clone(),
+    }
+}
+
+fn apply_material_options(material: &mut StandardMaterial, view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) {
+    material.unlit = view_options.shading_mode != crate::ShadingMode::Lit || view_options.vertex_colors == crate::DisplayMode::Only;
+    material.base_color = Color::WHITE;
+    material.base_color_texture = if matches!(view_options.shading_mode, crate::ShadingMode::Normals) || view_options.vertex_colors == crate::DisplayMode::Only {
+        None
+    } else {
+        loaded_mesh.diffuse_texture.clone()
+    };
+}
+
+fn visibility_for(display_mode: crate::DisplayMode, is_collision: bool) -> Visibility {
+    match display_mode {
+        crate::DisplayMode::Off if is_collision => Visibility::Hidden,
+        crate::DisplayMode::Only if !is_collision => Visibility::Hidden,
+        _ => Visibility::Inherited,
     }
 }
 
