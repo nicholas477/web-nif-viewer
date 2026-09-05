@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const fetch_file_from_server: (a: number, b: number) => any;
 export const main: (a: number, b: number) => number;
+export const fetch_file_from_server: (a: number, b: number) => any;
 export const rust_zstd_wasm_shim_calloc: (a: number, b: number) => number;
 export const rust_zstd_wasm_shim_free: (a: number) => void;
 export const rust_zstd_wasm_shim_malloc: (a: number) => number;
