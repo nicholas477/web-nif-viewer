@@ -47,7 +47,6 @@ impl std::error::Error for FileError {
     }
 }
 
-
 #[wasm_bindgen]
 pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     let window = web_sys::window().ok_or("no global window found")?;
@@ -82,7 +81,8 @@ pub async fn upload_file(
     request_init.set_body(&form_data);
     let request = Request::new_with_str_and_init(UPLOAD_URL, &request_init)
         .map_err(|error| FileError::FetchError(format!("{error:?}")))?;
-    let window = web_sys::window().ok_or_else(|| FileError::FetchError("no global window found".to_string()))?;
+    let window = web_sys::window()
+        .ok_or_else(|| FileError::FetchError("no global window found".to_string()))?;
     let response: Response = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|error| FileError::FetchError(format!("{error:?}")))?

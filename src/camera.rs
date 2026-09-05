@@ -78,7 +78,10 @@ fn update_camera(
         if buttons.pressed(MouseButton::Left) {
             camera.yaw += mouse_delta.x / window.width() * std::f32::consts::TAU;
             camera.pitch = (camera.pitch + mouse_delta.y / window.height() * std::f32::consts::PI)
-                .clamp(-std::f32::consts::FRAC_PI_2 + 0.01, std::f32::consts::FRAC_PI_2 - 0.01);
+                .clamp(
+                    -std::f32::consts::FRAC_PI_2 + 0.01,
+                    std::f32::consts::FRAC_PI_2 - 0.01,
+                );
         }
 
         if buttons.pressed(MouseButton::Right) {

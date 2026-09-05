@@ -1,8 +1,8 @@
 use crate::nif;
-use std::sync::{Arc, RwLock};
 use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
+use std::sync::{Arc, RwLock};
 
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
@@ -25,11 +25,11 @@ pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
         (zip_url, selected_file)
     });
 
-    state.zip_url_input = zip_url.clone();
-    state.pending_file = selected_file;
+    state.archive.zip_url_input = zip_url.clone();
+    state.archive.pending_file = selected_file;
 
-    let file_system = state.file_system.clone();
-    let load_status = state.archive_load_status.clone();
+    let file_system = state.archive.file_system.clone();
+    let load_status = state.archive.archive_load_status.clone();
     spawn_local(async move {
         match crate::file::fetch_and_unzip(&zip_url, &load_status).await {
             Ok(files) => {
@@ -53,7 +53,14 @@ pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
 pub fn ui_system(
     mut contexts: EguiContexts,
     mut camera: Single<&mut Camera, Without<EguiContext>>,
-    camera3d: Single<(&mut Camera3d, &Projection, &mut crate::camera::PanOrbitCamera), Without<EguiContext>>,
+    camera3d: Single<
+        (
+            &mut Camera3d,
+            &Projection,
+            &mut crate::camera::PanOrbitCamera,
+        ),
+        Without<EguiContext>,
+    >,
     window: Single<&mut Window, With<PrimaryWindow>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -61,7 +68,12 @@ pub fn ui_system(
     mut materials: ResMut<Assets<crate::PhongMaterial>>,
     loaded_meshes: Query<Entity, With<nif::LoadedNifMesh>>,
     mut loaded_materials: Query<
-        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &nif::LoadedNifMesh),
+        (
+            &mut Mesh3d,
+            &MeshMaterial3d<crate::PhongMaterial>,
+            &mut Visibility,
+            &nif::LoadedNifMesh,
+        ),
         Without<nif::LoadedNifWireframe>,
     >,
     mut loaded_wireframes: Query<
@@ -81,6 +93,7 @@ pub fn ui_system(
     );
 
     let file_names = state
+        .archive
         .file_system
         .read()
         .unwrap()
@@ -91,35 +104,36 @@ pub fn ui_system(
     let window: &mut Window = window.into_inner().into_inner();
     let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
-    let uploaded_download_url = state.upload_status.write().unwrap().download_url.take();
+    let uploaded_download_url = state
+        .archive
+        .upload_status
+        .write()
+        .unwrap()
+        .download_url
+        .take();
     if let Some(download_url) = uploaded_download_url {
         start_archive_load(&mut state, download_url, None);
     }
 
-    if let Some(pending_file) = state.pending_file.clone()
+    if let Some(pending_file) = state.archive.pending_file.clone()
         && file_names
             .iter()
             .any(|file_name| file_name == &pending_file)
         && pending_file.to_lowercase().ends_with(".nif")
     {
-        state.pending_file = None;
-        state.selected_file = Some(pending_file.clone());
-        let file_system = state.file_system.clone();
+        state.archive.pending_file = None;
+        state.archive.selected_file = Some(pending_file.clone());
+        let file_system = state.archive.file_system.clone();
         let view_options = crate::ViewOptions::from(&*state);
 
         let load_result = {
-            let crate::UIState {
-                nif_objects,
-                nif_roots,
-                triangle_count,
-                ..
-            } = &mut *state;
+            let inspector = &mut state.inspector;
             nif::load_nif(
                 &pending_file,
                 &file_system,
-                nif_objects,
-                nif_roots,
-                triangle_count,
+                &mut inspector.nif_objects,
+                &mut inspector.nif_roots,
+                &mut inspector.triangle_count,
                 view_options,
                 &mut commands,
                 &mut meshes,
@@ -130,9 +144,9 @@ pub fn ui_system(
             )
         };
         if let Err(error) = load_result {
-            state.nif_load_error = Some(error);
+            state.archive.nif_load_error = Some(error);
         } else {
-            record_recent_file(&state.zip_url_input, &pending_file);
+            record_recent_file(&state.archive.zip_url_input, &pending_file);
             nif::center_camera_on_mesh(&meshes, projection, window, &mut pan_orbit);
         }
     }
@@ -148,22 +162,17 @@ pub fn ui_system(
     if let Some(file_name) = left_panel.inner
         && file_name.to_lowercase().ends_with(".nif")
     {
-        update_query(&state.zip_url_input, Some(&file_name));
-        let file_system = state.file_system.clone();
+        update_query(&state.archive.zip_url_input, Some(&file_name));
+        let file_system = state.archive.file_system.clone();
         let view_options = crate::ViewOptions::from(&*state);
         let load_result = {
-            let crate::UIState {
-                nif_objects,
-                nif_roots,
-                triangle_count,
-                ..
-            } = &mut *state;
+            let inspector = &mut state.inspector;
             nif::load_nif(
                 &file_name,
                 &file_system,
-                nif_objects,
-                nif_roots,
-                triangle_count,
+                &mut inspector.nif_objects,
+                &mut inspector.nif_roots,
+                &mut inspector.triangle_count,
                 view_options,
                 &mut commands,
                 &mut meshes,
@@ -174,9 +183,9 @@ pub fn ui_system(
             )
         };
         if let Err(error) = load_result {
-            state.nif_load_error = Some(error);
+            state.archive.nif_load_error = Some(error);
         } else {
-            record_recent_file(&state.zip_url_input, &file_name);
+            record_recent_file(&state.archive.zip_url_input, &file_name);
             nif::center_camera_on_mesh(&meshes, projection, window, &mut pan_orbit);
         }
     }
@@ -186,26 +195,45 @@ pub fn ui_system(
         .show(&mut viewport_ui, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("Open File").clicked() {
-                    state.show_zip_popup = true;
+                    state.archive.show_zip_popup = true;
                 }
                 if ui.button("Upload File").clicked() {
-                    open_upload_picker(state.upload_status.clone());
+                    open_upload_picker(state.archive.upload_status.clone());
                 }
                 draw_recent_menu(ui, &mut state);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let previous_options = crate::ViewOptions::from(&*state);
-                    ui.label(format!("{} triangles", state.triangle_count));
-                    ui.checkbox(&mut state.wireframe, "Wireframe");
+                    ui.label(format!("{} triangles", state.inspector.triangle_count));
+                    ui.checkbox(&mut state.view.wireframe, "Wireframe");
                     egui::ComboBox::from_label("Collision")
-                        .selected_text(state.collision.label())
-                        .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.collision, mode, mode.label()); });
-                    ui.add_enabled_ui(state.shading_mode != crate::ShadingMode::Normals, |ui| {
-                        egui::ComboBox::from_label("Vertex colors")
-                            .selected_text(state.vertex_colors.label())
-                            .show_ui(ui, |ui| for mode in crate::DisplayMode::ALL { ui.selectable_value(&mut state.vertex_colors, mode, mode.label()); });
-                    });
-                    for mode in [crate::ShadingMode::Normals, crate::ShadingMode::Unlit, crate::ShadingMode::Lit] {
-                        ui.selectable_value(&mut state.shading_mode, mode, mode.label());
+                        .selected_text(state.view.collision.label())
+                        .show_ui(ui, |ui| {
+                            for mode in crate::DisplayMode::ALL {
+                                ui.selectable_value(&mut state.view.collision, mode, mode.label());
+                            }
+                        });
+                    ui.add_enabled_ui(
+                        state.view.shading_mode != crate::ShadingMode::Normals,
+                        |ui| {
+                            egui::ComboBox::from_label("Vertex colors")
+                                .selected_text(state.view.vertex_colors.label())
+                                .show_ui(ui, |ui| {
+                                    for mode in crate::DisplayMode::ALL {
+                                        ui.selectable_value(
+                                            &mut state.view.vertex_colors,
+                                            mode,
+                                            mode.label(),
+                                        );
+                                    }
+                                });
+                        },
+                    );
+                    for mode in [
+                        crate::ShadingMode::Normals,
+                        crate::ShadingMode::Unlit,
+                        crate::ShadingMode::Lit,
+                    ] {
+                        ui.selectable_value(&mut state.view.shading_mode, mode, mode.label());
                     }
                     let view_options = crate::ViewOptions::from(&*state);
                     if view_options != previous_options {
@@ -235,7 +263,7 @@ pub fn ui_system(
         ..default()
     });
 
-    if state.show_zip_popup {
+    if state.archive.show_zip_popup {
         draw_zip_popup(ctx, &mut state);
     }
 
@@ -248,7 +276,7 @@ pub fn ui_system(
 }
 
 fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
-    let status = state.archive_load_status.read().unwrap();
+    let status = state.archive.archive_load_status.read().unwrap();
     let Some(phase) = status.phase.as_deref() else {
         return;
     };
@@ -266,9 +294,16 @@ fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
 }
 
 fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
-    let archive_error = state.archive_load_status.read().unwrap().error.clone();
-    let upload_error = state.upload_status.read().unwrap().error.clone();
+    let archive_error = state
+        .archive
+        .archive_load_status
+        .read()
+        .unwrap()
+        .error
+        .clone();
+    let upload_error = state.archive.upload_status.read().unwrap().error.clone();
     let error = state
+        .archive
         .nif_load_error
         .clone()
         .or(archive_error)
@@ -285,15 +320,15 @@ fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
             ui.label(error);
             ui.add_space(8.0);
             if ui.button("Close").clicked() {
-                state.nif_load_error = None;
-                state.archive_load_status.write().unwrap().error = None;
-                state.upload_status.write().unwrap().error = None;
+                state.archive.nif_load_error = None;
+                state.archive.archive_load_status.write().unwrap().error = None;
+                state.archive.upload_status.write().unwrap().error = None;
             }
         });
 }
 
 fn draw_upload_status(ctx: &egui::Context, state: &crate::UIState) {
-    let status = state.upload_status.read().unwrap();
+    let status = state.archive.upload_status.read().unwrap();
     let Some(phase) = status.phase.as_deref() else {
         return;
     };
@@ -311,7 +346,7 @@ fn draw_upload_status(ctx: &egui::Context, state: &crate::UIState) {
 }
 
 fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState) {
-    let success = state.upload_status.read().unwrap().success.clone();
+    let success = state.archive.upload_status.read().unwrap().success.clone();
     let Some(success) = success else {
         return;
     };
@@ -324,7 +359,7 @@ fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState) {
             ui.label(success);
             ui.add_space(8.0);
             if ui.button("Close").clicked() {
-                state.upload_status.write().unwrap().success = None;
+                state.archive.upload_status.write().unwrap().success = None;
             }
         });
 }
@@ -339,8 +374,7 @@ fn open_upload_picker(status: Arc<RwLock<crate::UploadStatus>>) {
     let Ok(element) = document.create_element("input") else {
         return;
     };
-    let Ok(input) = element.dyn_into::<web_sys::HtmlInputElement>()
-    else {
+    let Ok(input) = element.dyn_into::<web_sys::HtmlInputElement>() else {
         return;
     };
     input.set_type("file");
@@ -436,17 +470,18 @@ fn draw_nif_inspector(
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     for file_name in sorted_file_names {
-                        let is_selected = state.selected_file.as_deref() == Some(file_name.as_str());
+                        let is_selected =
+                            state.archive.selected_file.as_deref() == Some(file_name.as_str());
 
                         if ui.selectable_label(is_selected, &file_name).clicked() {
-                            state.selected_file = Some(file_name.clone());
+                            state.archive.selected_file = Some(file_name.clone());
                             clicked_file = Some(file_name);
                         }
                     }
                 });
         });
 
-    if !state.nif_objects.is_empty() {
+    if !state.inspector.nif_objects.is_empty() {
         ui.add_space(12.0);
         ui.heading("NIF Inspector");
         ui.separator();
@@ -459,11 +494,12 @@ fn draw_nif_inspector(
                     .id_salt("nif_inspector_scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        for &root in &state.nif_roots {
-                            draw_nif_object(ui, &state.nif_objects, root);
+                        for &root in &state.inspector.nif_roots {
+                            draw_nif_object(ui, &state.inspector.nif_objects, root);
                         }
                     });
-            });
+            },
+        );
     }
 
     clicked_file
@@ -529,18 +565,18 @@ fn update_query(zip_url: &str, selected_file: Option<&str>) {
 
 fn start_archive_load(state: &mut crate::UIState, zip_url: String, pending_file: Option<String>) {
     update_query(&zip_url, pending_file.as_deref());
-    state.zip_url_input = zip_url.clone();
-    state.selected_file = None;
-    state.pending_file = pending_file;
-    *state.file_system.write().unwrap() = Default::default();
+    state.archive.zip_url_input = zip_url.clone();
+    state.archive.selected_file = None;
+    state.archive.pending_file = pending_file;
+    *state.archive.file_system.write().unwrap() = Default::default();
     {
-        let mut status = state.archive_load_status.write().unwrap();
+        let mut status = state.archive.archive_load_status.write().unwrap();
         status.phase = Some("Preparing download...".to_string());
         status.error = None;
     }
 
-    let file_system = state.file_system.clone();
-    let load_status = state.archive_load_status.clone();
+    let file_system = state.archive.file_system.clone();
+    let load_status = state.archive.archive_load_status.clone();
     spawn_local(async move {
         match crate::file::fetch_and_unzip(&zip_url, &load_status).await {
             Ok(files) => {
@@ -647,20 +683,20 @@ fn draw_zip_popup(ctx: &egui::Context, state: &mut crate::UIState) {
             ui.label("Enter the direct URL of the target .zip archive:");
 
             // Text input linked directly to our Bevy state resource
-            ui.text_edit_singleline(&mut state.zip_url_input);
+            ui.text_edit_singleline(&mut state.archive.zip_url_input);
 
             ui.add_space(8.0);
 
             ui.horizontal(|ui| {
                 if ui.button("Download & Extract").clicked() {
-                    let url_to_load = state.zip_url_input.clone();
+                    let url_to_load = state.archive.zip_url_input.clone();
                     start_archive_load(state, url_to_load, None);
 
-                    state.show_zip_popup = false;
+                    state.archive.show_zip_popup = false;
                 }
 
                 if ui.button("Cancel").clicked() {
-                    state.show_zip_popup = false;
+                    state.archive.show_zip_popup = false;
                 }
             });
         });

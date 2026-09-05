@@ -3,14 +3,11 @@ use bevy::image::{
     CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
     ImageSamplerDescriptor, ImageType,
 };
-use bevy::math::bounding::BoundingVolume;
 use bevy::prelude::*;
-use bevy_egui::egui;
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
     AlphaTestFunction, NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream,
-    NiTexturingProperty, NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap,
-    TextureSource,
+    NiTexturingProperty, NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap, TextureSource,
 };
 
 #[derive(Component)]
@@ -290,13 +287,13 @@ pub fn load_nif(
                 material.alpha_mode = AlphaMode::Blend;
             }
             if alpha_property.alpha_testing() {
-                material.settings.w = alpha_test_settings(alpha_property.test_mode(), alpha_property.test_ref);
+                material.settings.w =
+                    alpha_test_settings(alpha_property.test_mode(), alpha_property.test_ref);
                 material.alpha_mode = AlphaMode::Mask(0.0);
             }
         }
 
-        if let Some(texture_path) = diffuse_texture_path(&stream, shape)
-        {
+        if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
             if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
                 let extension = texture_path
                     .rsplit('.')
@@ -392,15 +389,45 @@ pub fn load_nif(
             bevy::render::render_resource::PrimitiveTopology::LineList,
             bevy::asset::RenderAssetUsages::default(),
         );
-        wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, data.base.base.vertices.iter().map(|vertex| [vertex.x, vertex.y, vertex.z]).collect::<Vec<_>>());
+        wireframe_mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            data.base
+                .base
+                .vertices
+                .iter()
+                .map(|vertex| [vertex.x, vertex.y, vertex.z])
+                .collect::<Vec<_>>(),
+        );
         wireframe_mesh.insert_indices(bevy::render::mesh::Indices::U16(
-            data.triangles.iter().flat_map(|triangle| [triangle[0], triangle[1], triangle[1], triangle[2], triangle[2], triangle[0]]).collect(),
+            data.triangles
+                .iter()
+                .flat_map(|triangle| {
+                    [
+                        triangle[0],
+                        triangle[1],
+                        triangle[1],
+                        triangle[2],
+                        triangle[2],
+                        triangle[0],
+                    ]
+                })
+                .collect(),
         ));
         commands.spawn((
             Mesh3d(meshes.add(wireframe_mesh)),
-            MeshMaterial3d(materials.add(crate::PhongMaterial { color: LinearRgba::BLACK, color_texture: None, settings: Vec4::new(0.0, 0.0, 1.0, 0.0), alpha_mode: AlphaMode::Opaque, cull_mode: Some(wgpu_types::Face::Back) })),
+            MeshMaterial3d(materials.add(crate::PhongMaterial {
+                color: LinearRgba::BLACK,
+                color_texture: None,
+                settings: Vec4::new(0.0, 0.0, 1.0, 0.0),
+                alpha_mode: AlphaMode::Opaque,
+                cull_mode: Some(wgpu_types::Face::Back),
+            })),
             transform,
-            if view_options.wireframe { base_visibility } else { Visibility::Hidden },
+            if view_options.wireframe {
+                base_visibility
+            } else {
+                Visibility::Hidden
+            },
             LoadedNifWireframe { is_collision },
         ));
         shape_count += 1;
@@ -418,7 +445,12 @@ pub fn apply_view_options(
     view_options: crate::ViewOptions,
     materials: &mut Assets<crate::PhongMaterial>,
     loaded_meshes: &mut Query<
-        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &LoadedNifMesh),
+        (
+            &mut Mesh3d,
+            &MeshMaterial3d<crate::PhongMaterial>,
+            &mut Visibility,
+            &LoadedNifMesh,
+        ),
         Without<LoadedNifWireframe>,
     >,
     wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
@@ -439,15 +471,24 @@ pub fn apply_view_options(
     }
 }
 
-fn mesh_handle_for_options(view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) -> Handle<Mesh> {
+fn mesh_handle_for_options(
+    view_options: crate::ViewOptions,
+    loaded_mesh: &LoadedNifMesh,
+) -> Handle<Mesh> {
     match view_options.shading_mode {
         crate::ShadingMode::Normals => loaded_mesh.normal_mesh.clone(),
-        _ if view_options.vertex_colors != crate::DisplayMode::Off => loaded_mesh.vertex_color_mesh.clone(),
+        _ if view_options.vertex_colors != crate::DisplayMode::Off => {
+            loaded_mesh.vertex_color_mesh.clone()
+        }
         _ => loaded_mesh.uncolored_mesh.clone(),
     }
 }
 
-fn apply_material_options(material: &mut crate::PhongMaterial, view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) {
+fn apply_material_options(
+    material: &mut crate::PhongMaterial,
+    view_options: crate::ViewOptions,
+    loaded_mesh: &LoadedNifMesh,
+) {
     let use_vertex_colors = view_options.shading_mode == crate::ShadingMode::Normals
         || view_options.vertex_colors != crate::DisplayMode::Off;
     let use_texture = !matches!(view_options.shading_mode, crate::ShadingMode::Normals)

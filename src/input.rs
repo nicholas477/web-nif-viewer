@@ -1,6 +1,5 @@
 use crate::camera;
 use bevy::prelude::*;
-use bevy_egui::egui;
 
 pub fn input_system(
     camera_query: Single<(&Projection, &mut camera::PanOrbitCamera)>,
