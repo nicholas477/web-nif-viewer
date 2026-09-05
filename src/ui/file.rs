@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock};
 
+use crate::state::query;
 use bevy::prelude::*;
 use bevy_egui::egui;
 use wasm_bindgen::{JsCast, closure::Closure};
@@ -8,22 +9,22 @@ use wasm_bindgen_futures::spawn_local;
 const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
 const MAX_RECENT_FILES: usize = 10;
 
-const DEFAULT_MESH: (&str, Option<&str>) = (
+const DEFAULT_MESH: (&str, &str) = (
     "assets/tr_mw_flora_tree_indoril_elm.zip",
-    Some("meshes\\tr\\f\\tr_f_indoril_elm_01.nif"),
+    "meshes\\tr\\f\\tr_f_indoril_elm_01.nif",
 );
 
 /// Initializes archive and selected-file state from the URL or default mesh.
 pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
-    let query_state = crate::state::query::query_state().unwrap_or_else(|| {
-        crate::state::query::QueryState {
+    let query_state =
+        crate::state::query::query_state().unwrap_or_else(|| crate::state::query::QueryState {
             zip_url: DEFAULT_MESH.0.to_string(),
-            selected_file: DEFAULT_MESH.1.map(str::to_string),
-        }
-    });
+            selected_file: DEFAULT_MESH.1.to_string(),
+            view_state: state.view.clone(),
+        });
 
     state.archive.zip_url_input = query_state.zip_url.clone();
-    state.archive.pending_file = query_state.selected_file;
+    state.archive.pending_file = Some(query_state.selected_file);
     fetch_archive(
         query_state.zip_url,
         state.archive.file_system.clone(),
@@ -250,7 +251,14 @@ pub fn start_archive_load(
     zip_url: String,
     pending_file: Option<String>,
 ) {
-    crate::state::query::update_query(&zip_url, pending_file.as_deref());
+    crate::state::query::update_query(&query::QueryState {
+        zip_url: zip_url.clone(),
+        selected_file: pending_file
+            .as_deref()
+            .map(|s| s.into())
+            .unwrap_or_default(),
+        view_state: state.view.clone(),
+    });
     state.archive.zip_url_input = zip_url.clone();
     state.archive.selected_file = None;
     state.archive.pending_file = pending_file;

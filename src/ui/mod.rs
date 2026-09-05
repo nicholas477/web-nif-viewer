@@ -1,6 +1,7 @@
 mod file;
 mod inspector;
 
+use crate::state::query;
 use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
@@ -98,7 +99,12 @@ pub fn ui_system(
     if let Some(file_name) = left_panel.inner
         && file_name.to_lowercase().ends_with(".nif")
     {
-        crate::state::query::update_query(&state.archive.zip_url_input, Some(&file_name));
+        query::update_query(&crate::state::query::QueryState {
+            zip_url: state.archive.zip_url_input.clone(),
+            selected_file: file_name.clone(),
+            view_state: state.view.clone(),
+        });
+
         load_nif(
             &file_name,
             &mut state,
@@ -257,6 +263,7 @@ fn draw_view_controls(
 ) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let previous_options = crate::ViewOptions::from(&*state);
+
         ui.label(format!("{} triangles", state.inspector.triangle_count));
         ui.checkbox(&mut state.view.wireframe, "Wireframe");
         egui::ComboBox::from_label("Collision")
@@ -266,6 +273,7 @@ fn draw_view_controls(
                     ui.selectable_value(&mut state.view.collision, mode, mode.label());
                 }
             });
+
         ui.add_enabled_ui(
             state.view.shading_mode != crate::ShadingMode::Normals,
             |ui| {
@@ -278,6 +286,7 @@ fn draw_view_controls(
                     });
             },
         );
+
         for mode in [
             crate::ShadingMode::Normals,
             crate::ShadingMode::Unlit,
@@ -285,6 +294,7 @@ fn draw_view_controls(
         ] {
             ui.selectable_value(&mut state.view.shading_mode, mode, mode.label());
         }
+
         let view_options = crate::ViewOptions::from(&*state);
         if view_options != previous_options {
             crate::nif::apply_view_options(
@@ -293,6 +303,17 @@ fn draw_view_controls(
                 loaded_meshes,
                 loaded_wireframes,
             );
+
+            query::update_query(&query::QueryState {
+                zip_url: state.archive.zip_url_input.clone(),
+                selected_file: state
+                    .archive
+                    .selected_file
+                    .as_deref()
+                    .map(|s| s.into())
+                    .unwrap_or_default(),
+                view_state: state.view.clone(),
+            });
         }
     });
 }

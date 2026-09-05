@@ -1,10 +1,10 @@
+use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::{
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
     prelude::*,
     transform::TransformSystems,
     window::PrimaryWindow,
 };
-use bevy::camera::primitives::{Aabb, MeshAabb};
 
 #[derive(Component)]
 pub struct PanOrbitCamera {

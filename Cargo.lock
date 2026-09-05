@@ -2719,6 +2719,7 @@ dependencies = [
 name = "esp-viewer"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bevy",
  "bevy_egui",
  "js-sys",

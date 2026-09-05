@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use tes3::nif::{
-    AlphaTestFunction, NiStream,
-    NiTexturingProperty, NiTriShape, TextureMap, TextureSource,
+    AlphaTestFunction, NiStream, NiTexturingProperty, NiTriShape, TextureMap, TextureSource,
 };
 
 pub mod mesh;
@@ -29,6 +28,7 @@ pub fn apply_view_options(
             apply_material_options(&mut material, view_options, loaded_mesh);
         }
     }
+
     for (mut visibility, wireframe) in wireframes.iter_mut() {
         *visibility = if view_options.wireframe {
             visibility_for(view_options.collision, wireframe.is_collision)

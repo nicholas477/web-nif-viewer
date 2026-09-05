@@ -24,7 +24,7 @@ pub struct RecentFile {
     pub file_name: String,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum ShadingMode {
     Lit,
     #[default]
@@ -43,7 +43,7 @@ impl ShadingMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum DisplayMode {
     #[default]
     Off,
@@ -79,7 +79,7 @@ pub struct NifObjectInfo {
     pub children: Vec<usize>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ArchiveState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
@@ -91,14 +91,19 @@ pub struct ArchiveState {
     pub upload_status: Arc<RwLock<UploadStatus>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InspectorState {
     pub nif_objects: Vec<NifObjectInfo>,
     pub nif_roots: Vec<usize>,
     pub triangle_count: usize,
 }
 
-#[derive(Default)]
+// Generic helper function to check if a value is the default
+// fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+//     value == &T::default()
+// }
+
+#[derive(Default, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct ViewState {
     pub shading_mode: ShadingMode,
     pub vertex_colors: DisplayMode,
@@ -106,7 +111,7 @@ pub struct ViewState {
     pub wireframe: bool,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct UIState {
     pub archive: ArchiveState,
     pub inspector: InspectorState,
