@@ -2,15 +2,17 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 
+// URL query state, only on wasm
+#[cfg(target_arch = "wasm32")]
 pub mod query;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ArchiveLoadStatus {
     pub phase: Option<String>,
     pub error: Option<String>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct UploadStatus {
     pub phase: Option<String>,
     pub error: Option<String>,
@@ -18,10 +20,15 @@ pub struct UploadStatus {
     pub download_url: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 pub struct RecentFile {
     pub zip_url: String,
     pub file_name: String,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
+pub struct RecentFiles {
+    pub files : Vec<RecentFile>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]

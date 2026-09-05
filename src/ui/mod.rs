@@ -1,11 +1,13 @@
 mod file;
 mod inspector;
 
+#[cfg(target_arch = "wasm32")]
 use crate::state::query;
 use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
 
+#[cfg(target_arch = "wasm32")]
 pub use file::initialize_from_url;
 
 /// Draws the viewer UI, processes file selection, and updates the 3D viewport bounds.
@@ -61,6 +63,7 @@ pub fn ui_system(
     let window = window.into_inner().into_inner();
     let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
+    #[cfg(target_arch = "wasm32")]
     let uploaded_download_url = {
         state
             .archive
@@ -70,6 +73,7 @@ pub fn ui_system(
             .download_url
             .take()
     };
+    #[cfg(target_arch = "wasm32")]
     if let Some(download_url) = uploaded_download_url {
         file::start_archive_load(&mut state, download_url, None);
     }
@@ -99,6 +103,7 @@ pub fn ui_system(
     if let Some(file_name) = left_panel.inner
         && file_name.to_lowercase().ends_with(".nif")
     {
+        #[cfg(target_arch = "wasm32")]
         query::update_query(&crate::state::query::QueryState {
             zip_url: state.archive.zip_url_input.clone(),
             selected_file: file_name.clone(),
@@ -125,10 +130,11 @@ pub fn ui_system(
         .show(&mut viewport_ui, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("Open File").clicked() {
-                    state.archive.show_zip_popup = true;
+                    file::open_archive_picker(&mut state);
                 }
+                #[cfg(target_arch = "wasm32")]
                 if ui.button("Upload File").clicked() {
-                    file::open_upload_picker(state.archive.upload_status.clone());
+                    file::open_upload_picker(&mut state);
                 }
                 file::draw_recent_menu(ui, &mut state);
                 draw_view_controls(
@@ -154,6 +160,7 @@ pub fn ui_system(
         ..default()
     });
 
+    #[cfg(target_arch = "wasm32")]
     if state.archive.show_zip_popup {
         file::draw_zip_popup(ctx, &mut state);
     }
@@ -304,6 +311,7 @@ fn draw_view_controls(
                 loaded_wireframes,
             );
 
+            #[cfg(target_arch = "wasm32")]
             query::update_query(&query::QueryState {
                 zip_url: state.archive.zip_url_input.clone(),
                 selected_file: state
