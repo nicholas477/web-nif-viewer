@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use wgpu_types::BlendState;
 
 mod camera;
@@ -21,7 +22,7 @@ pub use state::*;
 fn main() {
     let mut binding = App::new();
     let app = binding
-        .add_plugins(camera::CameraPlugin)
+        .add_plugins(PanOrbitCameraPlugin)
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
