@@ -26,8 +26,8 @@ struct UploadResponse {
     url: String,
 }
 
-// 1. Implement Display to define how errors print to users
 impl fmt::Display for FileError {
+    /// Formats an archive or network error for display in the viewer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileError::FetchError(msg) => write!(f, "Fetch Error: {}", msg),
@@ -37,8 +37,8 @@ impl fmt::Display for FileError {
     }
 }
 
-// 2. Implement the standard Error trait
 impl std::error::Error for FileError {
+    /// Exposes the underlying I/O error when one is available.
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             FileError::IoError(err) => Some(err),
@@ -47,8 +47,8 @@ impl std::error::Error for FileError {
     }
 }
 
-
 #[wasm_bindgen]
+/// Fetches a URL through the browser and returns its response bytes.
 pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     let window = web_sys::window().ok_or("no global window found")?;
 
@@ -66,6 +66,7 @@ pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     Ok(zip_bytes)
 }
 
+/// Uploads an archive and returns the server-provided download URL.
 pub async fn upload_file(
     file: File,
     status: &Arc<RwLock<crate::UploadStatus>>,
@@ -82,7 +83,8 @@ pub async fn upload_file(
     request_init.set_body(&form_data);
     let request = Request::new_with_str_and_init(UPLOAD_URL, &request_init)
         .map_err(|error| FileError::FetchError(format!("{error:?}")))?;
-    let window = web_sys::window().ok_or_else(|| FileError::FetchError("no global window found".to_string()))?;
+    let window = web_sys::window()
+        .ok_or_else(|| FileError::FetchError("no global window found".to_string()))?;
     let response: Response = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|error| FileError::FetchError(format!("{error:?}")))?
@@ -116,7 +118,7 @@ pub async fn upload_file(
     Ok(download_url)
 }
 
-// Your previous code modified slightly to yield standard errors if desired
+/// Downloads, extracts, and normalizes every file in a ZIP archive.
 pub async fn fetch_and_unzip(
     url: &str,
     status: &ArchiveLoadStatus,
@@ -156,18 +158,123 @@ pub async fn fetch_and_unzip(
     Ok(file_system)
 }
 
+/// Finds a NIF asset reference relative to its source file, searching each ancestor directory.
 pub fn find_file(
-    file_system: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<u8>>>>,
+    file_system: &FS,
+    source_path: &str,
     requested_path: &str,
 ) -> Option<Vec<u8>> {
-    let requested_path = normalize_path(requested_path);
+    let requested_path = requested_path.replace('/', "\\");
     let file_system = file_system.read().ok()?;
 
-    file_system
-        .iter()
-        .find_map(|(path, bytes)| (normalize_path(path) == requested_path).then(|| bytes.clone()))
+    for directory in ancestor_directories(source_path) {
+        let candidate = if directory.is_empty() {
+            normalize_path(&requested_path)
+        } else {
+            normalize_path(&format!("{directory}\\{requested_path}"))
+        };
+        if let Some(bytes) = file_system.get(&candidate) {
+            return Some(bytes.clone());
+        }
+    }
+
+    None
 }
 
+/// Converts an archive path to the viewer's canonical backslash lowercase form.
 pub fn normalize_path(path: &str) -> String {
-    path.replace('/', "\\").to_ascii_lowercase()
+    path.replace('/', "\\")
+        .split('\\')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .fold(Vec::new(), |mut segments, segment| {
+            if segment == ".." {
+                segments.pop();
+            } else {
+                segments.push(segment);
+            }
+            segments
+        })
+        .join("\\")
+        .to_ascii_lowercase()
+}
+
+/// Returns the source file's directory followed by every parent through the archive root.
+fn ancestor_directories(source_path: &str) -> impl Iterator<Item = String> {
+    let mut directories = Vec::new();
+    let mut directory = normalize_path(source_path)
+        .rsplit_once('\\')
+        .map(|(directory, _)| directory.to_string());
+
+    loop {
+        match directory.take() {
+            Some(current) => {
+                directory = current
+                    .rsplit_once('\\')
+                    .map(|(parent, _)| parent.to_string());
+                directories.push(current);
+            }
+            None => {
+                directories.push(String::new());
+                break;
+            }
+        }
+    }
+
+    directories.into_iter()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_system(paths: &[(&str, &[u8])]) -> FS {
+        Arc::new(RwLock::new(
+            paths
+                .iter()
+                .map(|(path, bytes)| (normalize_path(path), bytes.to_vec()))
+                .collect(),
+        ))
+    }
+
+    #[test]
+    fn finds_asset_below_the_nif_directory() {
+        let file_system = file_system(&[("mods/example/textures/tree.dds", b"nearest")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "textures/tree.dds",
+            ),
+            Some(b"nearest".to_vec()),
+        );
+    }
+
+    #[test]
+    fn finds_asset_below_a_parent_directory() {
+        let file_system = file_system(&[("mods/textures/tree.dds", b"parent")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "textures/tree.dds",
+            ),
+            Some(b"parent".to_vec()),
+        );
+    }
+
+    #[test]
+    fn resolves_parent_segments_relative_to_the_nif_directory() {
+        let file_system = file_system(&[("mods/example/textures/tree.dds", b"relative")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "../textures/tree.dds",
+            ),
+            Some(b"relative".to_vec()),
+        );
+    }
 }

@@ -1,103 +1,30 @@
-use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::image::{
     CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
     ImageSamplerDescriptor, ImageType,
 };
-use bevy::math::bounding::BoundingVolume;
-use bevy::prelude::*;
-use bevy_egui::egui;
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    AlphaTestFunction, NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream,
-    NiTexturingProperty, NiTriShape, NiTriShapeData, RootCollisionNode, TextureMap,
-    TextureSource,
+    NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData,
+    RootCollisionNode,
 };
+
+use crate::nif::*;
 
 #[derive(Component)]
 pub struct LoadedNifMesh {
-    uncolored_mesh: Handle<Mesh>,
-    vertex_color_mesh: Handle<Mesh>,
-    normal_mesh: Handle<Mesh>,
-    diffuse_texture: Option<Handle<Image>>,
-    is_collision: bool,
+    pub uncolored_mesh: Handle<Mesh>,
+    pub vertex_color_mesh: Handle<Mesh>,
+    pub normal_mesh: Handle<Mesh>,
+    pub diffuse_texture: Option<Handle<Image>>,
+    pub is_collision: bool,
 }
 
 #[derive(Component)]
 pub struct LoadedNifWireframe {
-    is_collision: bool,
+    pub is_collision: bool,
 }
 
-fn combine_aabbs(aabbs: &[Aabb]) -> Option<Aabb> {
-    if aabbs.is_empty() {
-        return None;
-    }
-
-    // Initialize min and max using the first AABB's actual bounds
-    let first_min = aabbs[0].center - aabbs[0].half_extents;
-    let first_max = aabbs[0].center + aabbs[0].half_extents;
-
-    let (min, max) = aabbs.iter().skip(1).fold(
-        (first_min, first_max),
-        |(mut current_min, mut current_max), aabb| {
-            let aabb_min = aabb.center - aabb.half_extents;
-            let aabb_max = aabb.center + aabb.half_extents;
-
-            // Expand the bounds to encompass the new AABB
-            current_min = current_min.min(aabb_min);
-            current_max = current_max.max(aabb_max);
-
-            (current_min, current_max)
-        },
-    );
-
-    // Bevy provides a helper to build an Aabb from its min and max points
-    Some(Aabb::from_min_max(min.to_vec3(), max.to_vec3()))
-}
-
-// Center camera on loaded mesh
-pub fn center_camera_on_mesh(
-    meshes: &Assets<Mesh>,
-    camera_projection: &Projection,
-    window: &Window,
-    pan_orbit_camera: &mut crate::camera::PanOrbitCamera,
-) {
-    let aabbs = meshes
-        .iter()
-        .flat_map(|(_, mesh)| mesh.compute_aabb())
-        .collect::<Vec<_>>();
-
-    let aabb = combine_aabbs(&aabbs);
-
-    let Some(aabb) = aabb else {
-        bevy::log::warn!("No meshes found to center the camera on.");
-        return;
-    };
-
-    pan_orbit_camera.target_focus = aabb.center.to_vec3();
-
-    // Calculate the radius of the bounding sphere that encompasses the AABB
-    // The sphere should fit within the camera's field of view, so we use the diagonal of the AABB to determine the distance
-    let bounding_sphere_radius = aabb.half_extents.length();
-
-    if let Projection::Perspective(perspective) = camera_projection {
-        let fov_v = perspective.fov; // Vertical FOV in radians
-        let aspect_ratio = window.width() / window.height();
-
-        // Calculate horizontal FOV from vertical FOV and aspect ratio
-        let fov_h = 2.0 * ((fov_v / 2.0).tan() * aspect_ratio).atan();
-
-        // Distance required to fit vertically and horizontally
-        let distance_v = bounding_sphere_radius / (fov_v / 2.0).sin();
-        let distance_h = bounding_sphere_radius / (fov_h / 2.0).sin();
-
-        // Choose the larger distance to prevent clipping on any side
-        let required_distance = distance_v.max(distance_h);
-
-        // Update your camera's orbit distance
-        pan_orbit_camera.target_radius = required_distance;
-    }
-}
-
+/// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
 pub fn load_nif(
     file_name: &str,
     file_system: &crate::file::FS,
@@ -214,6 +141,7 @@ pub fn load_nif(
             .iter()
             .map(|uv| [uv.x, uv.y])
             .collect::<Vec<_>>();
+
         let indices = data
             .triangles
             .iter()
@@ -290,14 +218,14 @@ pub fn load_nif(
                 material.alpha_mode = AlphaMode::Blend;
             }
             if alpha_property.alpha_testing() {
-                material.settings.w = alpha_test_settings(alpha_property.test_mode(), alpha_property.test_ref);
+                material.settings.w =
+                    alpha_test_settings(alpha_property.test_mode(), alpha_property.test_ref);
                 material.alpha_mode = AlphaMode::Mask(0.0);
             }
         }
 
-        if let Some(texture_path) = diffuse_texture_path(&stream, shape)
-        {
-            if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
+        if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
+            if let Some(texture_bytes) = crate::file::find_file(file_system, file_name, &texture_path) {
                 let extension = texture_path
                     .rsplit('.')
                     .next()
@@ -388,19 +316,52 @@ pub fn load_nif(
             base_visibility,
             loaded_mesh,
         ));
+
         let mut wireframe_mesh = Mesh::new(
             bevy::render::render_resource::PrimitiveTopology::LineList,
             bevy::asset::RenderAssetUsages::default(),
         );
-        wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, data.base.base.vertices.iter().map(|vertex| [vertex.x, vertex.y, vertex.z]).collect::<Vec<_>>());
+        wireframe_mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            data.base
+                .base
+                .vertices
+                .iter()
+                .map(|vertex| [vertex.x, vertex.y, vertex.z])
+                .collect::<Vec<_>>(),
+        );
+
         wireframe_mesh.insert_indices(bevy::render::mesh::Indices::U16(
-            data.triangles.iter().flat_map(|triangle| [triangle[0], triangle[1], triangle[1], triangle[2], triangle[2], triangle[0]]).collect(),
+            data.triangles
+                .iter()
+                .flat_map(|triangle| {
+                    [
+                        triangle[0],
+                        triangle[1],
+                        triangle[1],
+                        triangle[2],
+                        triangle[2],
+                        triangle[0],
+                    ]
+                })
+                .collect(),
         ));
+
         commands.spawn((
             Mesh3d(meshes.add(wireframe_mesh)),
-            MeshMaterial3d(materials.add(crate::PhongMaterial { color: LinearRgba::BLACK, color_texture: None, settings: Vec4::new(0.0, 0.0, 1.0, 0.0), alpha_mode: AlphaMode::Opaque, cull_mode: Some(wgpu_types::Face::Back) })),
+            MeshMaterial3d(materials.add(crate::PhongMaterial {
+                color: LinearRgba::BLACK,
+                color_texture: None,
+                settings: Vec4::new(0.0, 0.0, 1.0, 0.0),
+                alpha_mode: AlphaMode::Opaque,
+                cull_mode: Some(wgpu_types::Face::Back),
+            })),
             transform,
-            if view_options.wireframe { base_visibility } else { Visibility::Hidden },
+            if view_options.wireframe {
+                base_visibility
+            } else {
+                Visibility::Hidden
+            },
             LoadedNifWireframe { is_collision },
         ));
         shape_count += 1;
@@ -412,96 +373,4 @@ pub fn load_nif(
 
     bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {file_name}");
     Ok(())
-}
-
-pub fn apply_view_options(
-    view_options: crate::ViewOptions,
-    materials: &mut Assets<crate::PhongMaterial>,
-    loaded_meshes: &mut Query<
-        (&mut Mesh3d, &MeshMaterial3d<crate::PhongMaterial>, &mut Visibility, &LoadedNifMesh),
-        Without<LoadedNifWireframe>,
-    >,
-    wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
-) {
-    for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_meshes.iter_mut() {
-        mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
-        *visibility = visibility_for(view_options.collision, loaded_mesh.is_collision);
-        if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            apply_material_options(&mut material, view_options, loaded_mesh);
-        }
-    }
-    for (mut visibility, wireframe) in wireframes.iter_mut() {
-        *visibility = if view_options.wireframe {
-            visibility_for(view_options.collision, wireframe.is_collision)
-        } else {
-            Visibility::Hidden
-        };
-    }
-}
-
-fn mesh_handle_for_options(view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) -> Handle<Mesh> {
-    match view_options.shading_mode {
-        crate::ShadingMode::Normals => loaded_mesh.normal_mesh.clone(),
-        _ if view_options.vertex_colors != crate::DisplayMode::Off => loaded_mesh.vertex_color_mesh.clone(),
-        _ => loaded_mesh.uncolored_mesh.clone(),
-    }
-}
-
-fn apply_material_options(material: &mut crate::PhongMaterial, view_options: crate::ViewOptions, loaded_mesh: &LoadedNifMesh) {
-    let use_vertex_colors = view_options.shading_mode == crate::ShadingMode::Normals
-        || view_options.vertex_colors != crate::DisplayMode::Off;
-    let use_texture = !matches!(view_options.shading_mode, crate::ShadingMode::Normals)
-        && view_options.vertex_colors != crate::DisplayMode::Only;
-    let unlit = view_options.shading_mode != crate::ShadingMode::Lit
-        || view_options.vertex_colors == crate::DisplayMode::Only;
-    material.color = LinearRgba::WHITE;
-    material.color_texture = if use_texture {
-        loaded_mesh.diffuse_texture.clone()
-    } else {
-        None
-    };
-    material.settings.x = use_texture as u32 as f32;
-    material.settings.y = use_vertex_colors as u32 as f32;
-    material.settings.z = unlit as u32 as f32;
-}
-
-fn alpha_test_settings(test_function: AlphaTestFunction, test_ref: u8) -> f32 {
-    let function = match test_function {
-        AlphaTestFunction::Less => 1,
-        AlphaTestFunction::Equal => 2,
-        AlphaTestFunction::LessEqual => 3,
-        AlphaTestFunction::Greater => 4,
-        AlphaTestFunction::NotEqual => 5,
-        AlphaTestFunction::GreaterEqual => 6,
-        AlphaTestFunction::Never => 7,
-        AlphaTestFunction::Always => 0,
-    };
-    function as f32 + f32::from(test_ref) / 256.0
-}
-
-fn visibility_for(display_mode: crate::DisplayMode, is_collision: bool) -> Visibility {
-    match display_mode {
-        crate::DisplayMode::Off if is_collision => Visibility::Hidden,
-        crate::DisplayMode::Only if !is_collision => Visibility::Hidden,
-        _ => Visibility::Inherited,
-    }
-}
-
-pub fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<String> {
-    let property = shape
-        .base
-        .base
-        .base
-        .get_property::<NiTexturingProperty>(stream)?;
-    let texture_map = property.texture_maps.first()?.as_ref()?;
-    let texture_link = match texture_map {
-        TextureMap::Map(map) => map.texture,
-        TextureMap::BumpMap(map) => map.base.texture,
-    };
-    let texture = stream.get(texture_link)?;
-
-    match &texture.source {
-        TextureSource::External(path) => Some(path.clone()),
-        TextureSource::Internal(_) => None,
-    }
 }
