@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 echo "Compiling Rust to WebAssembly..."
 cargo build --release --target wasm32-unknown-unknown
 
