@@ -2,7 +2,6 @@ use crate::nif;
 use std::sync::{Arc, RwLock};
 use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
-use bevy_panorbit_camera::PanOrbitCamera;
 use egui::{LayerId, Ui, UiBuilder};
 
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
@@ -54,7 +53,7 @@ pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
 pub fn ui_system(
     mut contexts: EguiContexts,
     mut camera: Single<&mut Camera, Without<EguiContext>>,
-    camera3d: Single<(&mut Camera3d, &Projection, &mut PanOrbitCamera), Without<EguiContext>>,
+    camera3d: Single<(&mut Camera3d, &Projection, &mut crate::camera::PanOrbitCamera), Without<EguiContext>>,
     window: Single<&mut Window, With<PrimaryWindow>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
