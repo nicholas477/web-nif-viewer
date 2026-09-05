@@ -14,11 +14,11 @@ use bevy_egui::{
     EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext, egui,
 };
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use wgpu_types::BlendState;
 
 mod file;
 mod nif;
+mod camera;
 mod input;
 mod ui;
 
@@ -176,7 +176,7 @@ pub struct UIState {
 
 fn main() {
     App::new()
-        .add_plugins(PanOrbitCameraPlugin)
+        .add_plugins(camera::CameraPlugin)
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
@@ -246,17 +246,7 @@ fn setup_system(
         Transform::from_xyz(350.0, -250.0, 150.0),
     ));
 
-    // World camera.
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(300.0, 300.0, 500.0).looking_at(Vec3::ZERO, Vec3::Z),
-        PanOrbitCamera {
-            axis: [Vec3::X, Vec3::Z, -Vec3::Y],
-            allow_upside_down: true,
-            orbit_smoothness: 0.0,
-            ..Default::default()
-        },
-    ));
+    camera::spawn(&mut commands);
 
     // Egui camera.
     commands.spawn((

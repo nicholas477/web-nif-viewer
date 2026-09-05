@@ -6,7 +6,6 @@ use bevy::image::{
 use bevy::math::bounding::BoundingVolume;
 use bevy::prelude::*;
 use bevy_egui::egui;
-use bevy_panorbit_camera::PanOrbitCamera;
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
     AlphaTestFunction, NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream,
@@ -60,7 +59,7 @@ pub fn center_camera_on_mesh(
     meshes: &Assets<Mesh>,
     camera_projection: &Projection,
     window: &Window,
-    pan_orbit_camera: &mut PanOrbitCamera,
+    pan_orbit_camera: &mut crate::camera::PanOrbitCamera,
 ) {
     let aabbs = meshes
         .iter()
