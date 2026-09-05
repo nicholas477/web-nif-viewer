@@ -1,9 +1,6 @@
 use bevy_egui::egui;
 
 #[cfg(target_arch = "wasm32")]
-pub const MAX_RECENT_FILES: usize = 10;
-
-#[cfg(target_arch = "wasm32")]
 mod web;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -14,6 +11,12 @@ pub use web::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::*;
+
+pub const MAX_RECENT_FILES: usize = 10;
+pub const DEFAULT_MESH: (&str, &str) = (
+    "assets/tr_mw_flora_tree_indoril_elm.zip",
+    "meshes\\tr\\f\\tr_f_indoril_elm_01.nif",
+);
 
 /// Draws the current archive download/extraction progress indicator.
 pub fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
@@ -112,12 +115,12 @@ pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState)
 pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::UIState) {
     ui.menu_button("Recent", |ui| {
         let recent_files = recent_files();
-        if recent_files.is_empty() {
+        if recent_files.files.is_empty() {
             ui.add_enabled(false, egui::Button::new("No recent files"));
             return;
         }
 
-        for recent in recent_files {
+        for recent in recent_files.files {
             let file_name = recent.file_name;
             let zip_url = recent.zip_url;
             let file_name_response =

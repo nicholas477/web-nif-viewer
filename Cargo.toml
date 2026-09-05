@@ -10,22 +10,19 @@ lto = 'thin'
 [dependencies]
 bevy_egui = "0.42.0"
 base64 = "0.22"
-js-sys = "0.3.104"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_urlencoded = "0.7"
-wasm-bindgen = "0.2.128"
-wasm-bindgen-futures = "0.4.77"
 wgpu-types = "29.0.4"
 tes3 = { git = "https://github.com/Greatness7/tes3", features = ["esp", "nif"] }
 zip = "8.6.0"
+toml = "1.1.5"
+serde_toml = "0.0.1"
 
 [dependencies.bevy]
 version = "0.19.1"
 default-features = false
 features = [
     "2d",
-    "3d",
     "ui",
 
     # Parts of Bevy:
@@ -38,6 +35,14 @@ features = [
     "bevy_render",
     "bevy_window",
     "bevy_winit",
+    "default_app",
+    "default_platform",
+    "picking",
+    "scene",
+    "3d_api",
+    "bevy_anti_alias",
+    "bevy_gizmos_render",
+    "bevy_post_process",
 
     # Platform-Specific
     "webgl2",                # Web: use WebGL2 instead of WebGPU
@@ -48,12 +53,17 @@ features = [
     "tga",
 ]
 
+# Desktop dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories = "6.0.0"
 rfd = "0.17"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-version = "0.3"
-features = [
+# WebAssembly-specific dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde_urlencoded = "0.7"
+wasm-bindgen = "0.2.128"
+wasm-bindgen-futures = "0.4.77"
+web-sys = { version = "0.3", features = [
     "Document",
     "Event",
     "EventTarget",
@@ -70,4 +80,5 @@ features = [
     "Url",
     "UrlSearchParams",
     "Window",
-]
+]}
+js-sys = "0.3.104"

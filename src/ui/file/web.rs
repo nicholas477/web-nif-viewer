@@ -6,19 +6,14 @@ use bevy::prelude::*;
 use wasm_bindgen::{JsCast, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 
-pub const DEFAULT_MESH: (&str, &str) = (
-    "assets/tr_mw_flora_tree_indoril_elm.zip",
-    "meshes\\tr\\f\\tr_f_indoril_elm_01.nif",
-);
-
 const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
 
 /// Initializes archive and selected-file state from the URL or default mesh.
 pub fn initialize_from_url(mut state: ResMut<crate::UIState>) {
     let query_state =
         crate::state::query::query_state().unwrap_or_else(|| crate::state::query::QueryState {
-            zip_url: DEFAULT_MESH.0.to_string(),
-            selected_file: DEFAULT_MESH.1.to_string(),
+            zip_url: super::DEFAULT_MESH.0.to_string(),
+            selected_file: super::DEFAULT_MESH.1.to_string(),
             view_state: state.view.clone(),
         });
 
@@ -146,40 +141,42 @@ fn fetch_archive(
 }
 
 /// Reads persisted recent archive/file pairs from the browser cookie.
-pub fn recent_files() -> Vec<crate::RecentFile> {
+pub fn recent_files() -> crate::RecentFiles {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
     let Ok(document) = document.dyn_into::<web_sys::HtmlDocument>() else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
     let Ok(cookies) = document.cookie() else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
     let Some(encoded_value) = cookies
         .split(';')
         .map(str::trim)
         .find_map(|cookie| cookie.strip_prefix(&format!("{RECENT_FILES_COOKIE}=")))
     else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
     let Ok(value) = js_sys::decode_uri_component(encoded_value) else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
     let Some(value) = value.as_string() else {
-        return Vec::new();
+        return crate::RecentFiles { files: Vec::new() };
     };
 
-    value
-        .lines()
-        .filter_map(|entry| {
-            let (zip_url, file_name) = entry.split_once('\t')?;
-            (!zip_url.is_empty() && !file_name.is_empty()).then(|| crate::RecentFile {
-                zip_url: zip_url.to_string(),
-                file_name: file_name.to_string(),
+    crate::RecentFiles {
+        files: value
+            .lines()
+            .filter_map(|entry| {
+                let (zip_url, file_name) = entry.split_once('\t')?;
+                (!zip_url.is_empty() && !file_name.is_empty()).then(|| crate::RecentFile {
+                    zip_url: zip_url.to_string(),
+                    file_name: file_name.to_string(),
+                })
             })
-        })
-        .collect()
+            .collect(),
+    }
 }
 
 /// Stores a successful archive/file selection at the front of the recent-files cookie.
@@ -195,17 +192,18 @@ pub fn record_recent_file(zip_url: &str, file_name: &str) {
     };
 
     let mut files = recent_files();
-    files.retain(|recent| recent.zip_url != zip_url);
-    files.insert(
+    files.files.retain(|recent| recent.zip_url != zip_url);
+    files.files.insert(
         0,
         crate::RecentFile {
             zip_url: zip_url.to_string(),
             file_name: file_name.to_string(),
         },
     );
-    files.truncate(super::MAX_RECENT_FILES);
+    files.files.truncate(super::MAX_RECENT_FILES);
 
     let value = files
+        .files
         .iter()
         .map(|recent| format!("{}\t{}", recent.zip_url, recent.file_name))
         .collect::<Vec<_>>()
