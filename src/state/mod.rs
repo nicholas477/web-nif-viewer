@@ -2,6 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 
+// URL query state, only on wasm
+#[cfg(target_arch = "wasm32")]
 pub mod query;
 
 #[derive(Clone, Default)]

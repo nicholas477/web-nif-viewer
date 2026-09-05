@@ -4,23 +4,29 @@ use std::{
     io::{self, Cursor, Read},
     sync::{Arc, RwLock},
 };
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
+#[cfg(target_arch = "wasm32")]
 use web_sys::{File, FormData, Request, RequestInit, Response, Url};
 use zip::ZipArchive;
 
 pub type FS = Arc<RwLock<HashMap<String, Vec<u8>>>>;
 pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;
 
+#[cfg(target_arch = "wasm32")]
 const UPLOAD_URL: &str = "https://files.nif.cactus.vg/upload";
 
 #[derive(Debug)]
 pub enum FileError {
+    #[cfg(target_arch = "wasm32")]
     FetchError(String),
     UnzipError(String),
     IoError(io::Error),
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(serde::Deserialize)]
 struct UploadResponse {
     url: String,
@@ -30,6 +36,7 @@ impl fmt::Display for FileError {
     /// Formats an archive or network error for display in the viewer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(target_arch = "wasm32")]
             FileError::FetchError(msg) => write!(f, "Fetch Error: {}", msg),
             FileError::UnzipError(msg) => write!(f, "Unzip Error: {}", msg),
             FileError::IoError(err) => write!(f, "IO Error: {}", err),
@@ -47,6 +54,7 @@ impl std::error::Error for FileError {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 /// Fetches a URL through the browser and returns its response bytes.
 pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
@@ -67,6 +75,7 @@ pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
 }
 
 /// Uploads an archive and returns the server-provided download URL.
+#[cfg(target_arch = "wasm32")]
 pub async fn upload_file(
     file: File,
     status: &Arc<RwLock<crate::UploadStatus>>,
@@ -119,16 +128,25 @@ pub async fn upload_file(
 }
 
 /// Downloads, extracts, and normalizes every file in a ZIP archive.
+#[cfg(target_arch = "wasm32")]
 pub async fn fetch_and_unzip(
     url: &str,
     status: &ArchiveLoadStatus,
 ) -> Result<HashMap<String, Vec<u8>>, FileError> {
-    let mut file_system: HashMap<String, Vec<u8>> = HashMap::new();
-
     status.write().unwrap().phase = Some("Downloading archive...".to_string());
     let zip_bytes = fetch_file_from_server(url)
         .await
         .map_err(|e| FileError::FetchError(format!("{:?}", e)))?;
+
+    unzip(zip_bytes, status)
+}
+
+/// Extracts and normalizes every file in a ZIP archive.
+pub fn unzip(
+    zip_bytes: Vec<u8>,
+    status: &ArchiveLoadStatus,
+) -> Result<HashMap<String, Vec<u8>>, FileError> {
+    let mut file_system: HashMap<String, Vec<u8>> = HashMap::new();
 
     status.write().unwrap().phase = Some("Opening archive...".to_string());
     let cursor = Cursor::new(zip_bytes);

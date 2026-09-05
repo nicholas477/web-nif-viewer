@@ -19,7 +19,8 @@ pub use state::*;
 
 /// Configures and starts the Bevy NIF viewer application.
 fn main() {
-    App::new()
+    let mut binding = App::new();
+    let app = binding
         .add_plugins(camera::CameraPlugin)
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
@@ -36,11 +37,15 @@ fn main() {
             ..Default::default()
         }) // Hook egui into Bevy's loop
         .add_plugins(MaterialPlugin::<PhongMaterial>::default())
-        .add_systems(Startup, (setup_system, ui::initialize_from_url))
+        .add_systems(Startup, setup_system)
         .init_resource::<UIState>()
         .add_systems(EguiPrimaryContextPass, ui::ui_system)
-        .add_systems(Update, input::input_system)
-        .run();
+        .add_systems(Update, input::input_system);
+
+    #[cfg(target_arch = "wasm32")]
+    app.add_systems(Startup, ui::initialize_from_url);
+
+    app.run();
 }
 
 /// Creates the grid, 3D camera, and overlay camera used by the viewer.

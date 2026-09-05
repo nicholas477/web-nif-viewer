@@ -10,3 +10,7 @@ wasm-bindgen --out-name esp-viewer --out-dir wasm/target --target web target/was
 
 echo "Optimizing WebAssembly..."
 wasm-opt wasm/target/esp-viewer_bg.wasm -Oz --strip-debug -o wasm/target/esp-viewer_bg.wasm
+
+echo "Copying assets..."
+rm -rf wasm/assets
+cp -R assets wasm/assets
