@@ -31,6 +31,7 @@ pub struct PhongMaterialKey {
 }
 
 impl From<&PhongMaterial> for PhongMaterialKey {
+    /// Extracts shader-specialization state from a Phong material.
     fn from(material: &PhongMaterial) -> Self {
         Self {
             cull_mode: material.cull_mode,
@@ -39,14 +40,17 @@ impl From<&PhongMaterial> for PhongMaterialKey {
 }
 
 impl Material for PhongMaterial {
+    /// Selects the custom fragment shader used to render this material.
     fn fragment_shader() -> ShaderRef {
         PHONG_SHADER_PATH.into()
     }
 
+    /// Chooses the Bevy render phase for opaque, masked, or blended materials.
     fn alpha_mode(&self) -> AlphaMode {
         self.alpha_mode
     }
 
+    /// Applies the NIF-derived face-culling mode to the render pipeline.
     fn specialize(
         _pipeline: &MaterialPipeline,
         descriptor: &mut RenderPipelineDescriptor,

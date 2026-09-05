@@ -17,6 +17,7 @@ mod ui;
 pub use material::PhongMaterial;
 pub use state::*;
 
+/// Configures and starts the Bevy NIF viewer application.
 fn main() {
     App::new()
         .add_plugins(camera::CameraPlugin)
@@ -42,6 +43,7 @@ fn main() {
         .run();
 }
 
+/// Creates the grid, 3D camera, and overlay camera used by the viewer.
 fn setup_system(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
     // Disable the automatic creation of a primary context to set it up manually for the camera we need.
     egui_global_settings.auto_create_primary_context = false;
@@ -59,32 +61,32 @@ fn setup_system(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlo
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
     ));
 
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 10_000.0,
-            shadow_maps_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.8, -0.6)),
-    ));
-    commands.spawn((
-        PointLight {
-            intensity: 250_000.0,
-            range: 2_000.0,
-            color: Color::srgb(0.75, 0.85, 1.0),
-            ..default()
-        },
-        Transform::from_xyz(-400.0, 300.0, 300.0),
-    ));
-    commands.spawn((
-        PointLight {
-            intensity: 150_000.0,
-            range: 2_000.0,
-            color: Color::srgb(1.0, 0.78, 0.62),
-            ..default()
-        },
-        Transform::from_xyz(350.0, -250.0, 150.0),
-    ));
+    // commands.spawn((
+    //     DirectionalLight {
+    //         illuminance: 10_000.0,
+    //         shadow_maps_enabled: true,
+    //         ..default()
+    //     },
+    //     Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.8, -0.6)),
+    // ));
+    // commands.spawn((
+    //     PointLight {
+    //         intensity: 250_000.0,
+    //         range: 2_000.0,
+    //         color: Color::srgb(0.75, 0.85, 1.0),
+    //         ..default()
+    //     },
+    //     Transform::from_xyz(-400.0, 300.0, 300.0),
+    // ));
+    // commands.spawn((
+    //     PointLight {
+    //         intensity: 150_000.0,
+    //         range: 2_000.0,
+    //         color: Color::srgb(1.0, 0.78, 0.62),
+    //         ..default()
+    //     },
+    //     Transform::from_xyz(350.0, -250.0, 150.0),
+    // ));
 
     camera::spawn(&mut commands);
 

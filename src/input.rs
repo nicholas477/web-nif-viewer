@@ -1,6 +1,7 @@
 use crate::camera;
 use bevy::prelude::*;
 
+/// Handles viewer keyboard shortcuts, including framing the mesh with `F`.
 pub fn input_system(
     camera_query: Single<(&Projection, &mut camera::PanOrbitCamera)>,
     window: Single<&Window>,

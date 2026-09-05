@@ -26,8 +26,8 @@ struct UploadResponse {
     url: String,
 }
 
-// 1. Implement Display to define how errors print to users
 impl fmt::Display for FileError {
+    /// Formats an archive or network error for display in the viewer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileError::FetchError(msg) => write!(f, "Fetch Error: {}", msg),
@@ -37,8 +37,8 @@ impl fmt::Display for FileError {
     }
 }
 
-// 2. Implement the standard Error trait
 impl std::error::Error for FileError {
+    /// Exposes the underlying I/O error when one is available.
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             FileError::IoError(err) => Some(err),
@@ -48,6 +48,7 @@ impl std::error::Error for FileError {
 }
 
 #[wasm_bindgen]
+/// Fetches a URL through the browser and returns its response bytes.
 pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     let window = web_sys::window().ok_or("no global window found")?;
 
@@ -65,6 +66,7 @@ pub async fn fetch_file_from_server(url: &str) -> Result<Vec<u8>, JsValue> {
     Ok(zip_bytes)
 }
 
+/// Uploads an archive and returns the server-provided download URL.
 pub async fn upload_file(
     file: File,
     status: &Arc<RwLock<crate::UploadStatus>>,
@@ -116,7 +118,7 @@ pub async fn upload_file(
     Ok(download_url)
 }
 
-// Your previous code modified slightly to yield standard errors if desired
+/// Downloads, extracts, and normalizes every file in a ZIP archive.
 pub async fn fetch_and_unzip(
     url: &str,
     status: &ArchiveLoadStatus,
@@ -156,6 +158,7 @@ pub async fn fetch_and_unzip(
     Ok(file_system)
 }
 
+/// Finds an archive file by normalized, case-insensitive path.
 pub fn find_file(
     file_system: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<u8>>>>,
     requested_path: &str,
@@ -168,6 +171,7 @@ pub fn find_file(
         .find_map(|(path, bytes)| (normalize_path(path) == requested_path).then(|| bytes.clone()))
 }
 
+/// Converts an archive path to the viewer's canonical backslash lowercase form.
 pub fn normalize_path(path: &str) -> String {
     path.replace('/', "\\").to_ascii_lowercase()
 }

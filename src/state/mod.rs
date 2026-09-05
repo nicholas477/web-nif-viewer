@@ -2,6 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 
+pub mod query;
+
 #[derive(Clone, Default)]
 pub struct ArchiveLoadStatus {
     pub phase: Option<String>,
@@ -31,6 +33,7 @@ pub enum ShadingMode {
 }
 
 impl ShadingMode {
+    /// Returns the label displayed for this shading mode in the UI.
     pub fn label(self) -> &'static str {
         match self {
             Self::Lit => "Lit",
@@ -51,6 +54,7 @@ pub enum DisplayMode {
 impl DisplayMode {
     pub const ALL: [Self; 3] = [Self::Off, Self::On, Self::Only];
 
+    /// Returns the label displayed for this display mode in the UI.
     pub fn label(self) -> &'static str {
         match self {
             Self::Off => "Off",
@@ -110,6 +114,7 @@ pub struct UIState {
 }
 
 impl From<&UIState> for ViewOptions {
+    /// Creates an immutable renderer-facing snapshot of the selected view controls.
     fn from(state: &UIState) -> Self {
         Self {
             shading_mode: state.view.shading_mode,
