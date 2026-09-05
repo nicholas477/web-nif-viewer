@@ -225,7 +225,7 @@ pub fn load_nif(
         }
 
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) = crate::file::find_file(file_system, &texture_path) {
+            if let Some(texture_bytes) = crate::file::find_file(file_system, file_name, &texture_path) {
                 let extension = texture_path
                     .rsplit('.')
                     .next()

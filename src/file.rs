@@ -158,20 +158,123 @@ pub async fn fetch_and_unzip(
     Ok(file_system)
 }
 
-/// Finds an archive file by normalized, case-insensitive path.
+/// Finds a NIF asset reference relative to its source file, searching each ancestor directory.
 pub fn find_file(
-    file_system: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<u8>>>>,
+    file_system: &FS,
+    source_path: &str,
     requested_path: &str,
 ) -> Option<Vec<u8>> {
-    let requested_path = normalize_path(requested_path);
+    let requested_path = requested_path.replace('/', "\\");
     let file_system = file_system.read().ok()?;
 
-    file_system
-        .iter()
-        .find_map(|(path, bytes)| (normalize_path(path) == requested_path).then(|| bytes.clone()))
+    for directory in ancestor_directories(source_path) {
+        let candidate = if directory.is_empty() {
+            normalize_path(&requested_path)
+        } else {
+            normalize_path(&format!("{directory}\\{requested_path}"))
+        };
+        if let Some(bytes) = file_system.get(&candidate) {
+            return Some(bytes.clone());
+        }
+    }
+
+    None
 }
 
 /// Converts an archive path to the viewer's canonical backslash lowercase form.
 pub fn normalize_path(path: &str) -> String {
-    path.replace('/', "\\").to_ascii_lowercase()
+    path.replace('/', "\\")
+        .split('\\')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .fold(Vec::new(), |mut segments, segment| {
+            if segment == ".." {
+                segments.pop();
+            } else {
+                segments.push(segment);
+            }
+            segments
+        })
+        .join("\\")
+        .to_ascii_lowercase()
+}
+
+/// Returns the source file's directory followed by every parent through the archive root.
+fn ancestor_directories(source_path: &str) -> impl Iterator<Item = String> {
+    let mut directories = Vec::new();
+    let mut directory = normalize_path(source_path)
+        .rsplit_once('\\')
+        .map(|(directory, _)| directory.to_string());
+
+    loop {
+        match directory.take() {
+            Some(current) => {
+                directory = current
+                    .rsplit_once('\\')
+                    .map(|(parent, _)| parent.to_string());
+                directories.push(current);
+            }
+            None => {
+                directories.push(String::new());
+                break;
+            }
+        }
+    }
+
+    directories.into_iter()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_system(paths: &[(&str, &[u8])]) -> FS {
+        Arc::new(RwLock::new(
+            paths
+                .iter()
+                .map(|(path, bytes)| (normalize_path(path), bytes.to_vec()))
+                .collect(),
+        ))
+    }
+
+    #[test]
+    fn finds_asset_below_the_nif_directory() {
+        let file_system = file_system(&[("mods/example/textures/tree.dds", b"nearest")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "textures/tree.dds",
+            ),
+            Some(b"nearest".to_vec()),
+        );
+    }
+
+    #[test]
+    fn finds_asset_below_a_parent_directory() {
+        let file_system = file_system(&[("mods/textures/tree.dds", b"parent")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "textures/tree.dds",
+            ),
+            Some(b"parent".to_vec()),
+        );
+    }
+
+    #[test]
+    fn resolves_parent_segments_relative_to_the_nif_directory() {
+        let file_system = file_system(&[("mods/example/textures/tree.dds", b"relative")]);
+
+        assert_eq!(
+            find_file(
+                &file_system,
+                "mods/example/meshes/tree.nif",
+                "../textures/tree.dds",
+            ),
+            Some(b"relative".to_vec()),
+        );
+    }
 }
