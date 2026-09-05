@@ -153,7 +153,10 @@ pub fn ui_system(
     left *= window.scale_factor();
     let top = top * window.scale_factor();
     let position = UVec2::new(left as u32, top as u32);
-    let size = UVec2::new(window.physical_width(), window.physical_height()) - position;
+    let size = UVec2::new(
+        window.physical_width().saturating_sub(left as u32),
+        window.physical_height().saturating_sub(top as u32),
+    );
     camera.viewport = Some(Viewport {
         physical_position: position,
         physical_size: size,
@@ -232,6 +235,7 @@ fn load_nif(
         &file_system,
         &mut inspector.nif_objects,
         &mut inspector.nif_roots,
+        &mut inspector.selected_node,
         &mut inspector.triangle_count,
         view_options,
         commands,

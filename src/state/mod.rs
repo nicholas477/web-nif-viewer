@@ -102,6 +102,7 @@ pub struct ArchiveState {
 pub struct InspectorState {
     pub nif_objects: Vec<NifObjectInfo>,
     pub nif_roots: Vec<usize>,
+    pub selected_node: Option<usize>,
     pub triangle_count: usize,
 }
 

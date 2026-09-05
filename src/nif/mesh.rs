@@ -4,8 +4,8 @@ use bevy::image::{
 };
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiCollisionSwitch, NiLink, NiNode, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData,
-    RootCollisionNode,
+    NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode,
+    Visitor,
 };
 
 use crate::nif::*;
@@ -30,6 +30,7 @@ pub fn load_nif(
     file_system: &crate::file::FS,
     nif_objects: &mut Vec<crate::NifObjectInfo>,
     nif_roots: &mut Vec<usize>,
+    nif_selected_node: &mut Option<usize>,
     triangle_count: &mut usize,
     view_options: crate::ViewOptions,
     commands: &mut Commands,
@@ -67,18 +68,18 @@ pub fn load_nif(
     *nif_objects = stream
         .objects
         .iter()
-        .map(|(key, object)| crate::NifObjectInfo {
+        .map(|(_, object)| crate::NifObjectInfo {
             type_name: String::from_utf8_lossy(object.type_name()).into_owned(),
             fields: format!("{object:#?}"),
-            children: stream
-                .get_as::<_, NiNode>(NiLink::<NiNode>::new(key))
-                .map(|node| {
-                    node.children
-                        .iter()
-                        .filter_map(|child| object_indices.get(&child.key).copied())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            children: {
+                let mut children = Vec::new();
+                object.visitor(&mut |link| {
+                    if let Some(index) = object_indices.get(&link) {
+                        children.push(*index);
+                    }
+                });
+                children
+            },
         })
         .collect();
     *nif_roots = stream
@@ -86,6 +87,7 @@ pub fn load_nif(
         .iter()
         .filter_map(|root| object_indices.get(&root.key).copied())
         .collect();
+    *nif_selected_node = None;
 
     let collision_shapes = stream
         .objects_of_type::<RootCollisionNode>()
