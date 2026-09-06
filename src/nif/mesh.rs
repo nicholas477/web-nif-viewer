@@ -4,8 +4,7 @@ use bevy::image::{
 };
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode,
-    Visitor,
+    NiCollisionSwitch, NiKey, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode, Visitor,
 };
 
 use crate::nif::*;
@@ -17,11 +16,13 @@ pub struct LoadedNifMesh {
     pub normal_mesh: Handle<Mesh>,
     pub diffuse_texture: Option<Handle<Image>>,
     pub is_collision: bool,
+    pub nif_node_index: Option<usize>,
 }
 
 #[derive(Component)]
 pub struct LoadedNifWireframe {
     pub is_collision: bool,
+    pub nif_node_index: usize,
 }
 
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
@@ -113,6 +114,9 @@ pub fn load_nif(
     let mut shape_count = 0;
     for (shape_link, shape) in stream.objects_of_type_with_link::<NiTriShape>() {
         let Some(data) = stream.get_as::<_, NiTriShapeData>(shape.base.base.geometry_data) else {
+            continue;
+        };
+        let Some(nif_node_index) = object_indices.get(&shape_link.key).copied() else {
             continue;
         };
 
@@ -308,11 +312,17 @@ pub fn load_nif(
             normal_mesh,
             diffuse_texture,
             is_collision: collision_shapes.contains(&shape_link.key),
+            nif_node_index: Some(nif_node_index),
         };
         let is_collision = loaded_mesh.is_collision;
         apply_material_options(&mut material, view_options, &loaded_mesh);
         let base_visibility = visibility_for(view_options.collision, is_collision);
+        let wireframe_transform = Transform {
+            scale: transform.scale * 1.0001,
+            ..transform
+        };
 
+        // Mesh spawned here
         commands.spawn((
             Mesh3d(mesh_handle_for_options(view_options, &loaded_mesh)),
             MeshMaterial3d(materials.add(material)),
@@ -360,13 +370,17 @@ pub fn load_nif(
                 alpha_mode: AlphaMode::Opaque,
                 cull_mode: Some(wgpu_types::Face::Back),
             })),
-            transform,
+            wireframe_transform,
             if view_options.wireframe {
                 base_visibility
             } else {
                 Visibility::Hidden
             },
-            LoadedNifWireframe { is_collision },
+            Pickable::IGNORE,
+            LoadedNifWireframe {
+                is_collision,
+                nif_node_index,
+            },
         ));
         shape_count += 1;
     }

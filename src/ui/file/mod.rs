@@ -114,7 +114,7 @@ pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState)
 /// Draws recent archive/file pairs and starts loading the selected entry.
 pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::UIState) {
     ui.menu_button("Recent", |ui| {
-        let recent_files = recent_files();
+        let recent_files = crate::state::recent_files::recent_files();
         if recent_files.files.is_empty() {
             ui.add_enabled(false, egui::Button::new("No recent files"));
             return;

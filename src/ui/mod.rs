@@ -7,8 +7,7 @@ use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
 
-#[cfg(target_arch = "wasm32")]
-pub use file::initialize_from_url;
+pub use file::initialize_default_mesh;
 
 /// Draws the viewer UI, processes file selection, and updates the 3D viewport bounds.
 pub fn ui_system(
@@ -246,7 +245,7 @@ fn load_nif(
         loaded_wireframes,
     ) {
         Ok(()) => {
-            file::record_recent_file(&state.archive.zip_url_input, file_name);
+            crate::state::recent_files::record_recent_file(&state.archive.zip_url_input, file_name);
             crate::camera::focus_loaded_meshes(meshes, projection, window, pan_orbit);
         }
         Err(error) => state.archive.nif_load_error = Some(error),

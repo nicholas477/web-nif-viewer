@@ -7,6 +7,8 @@ use tes3::nif::NiType;
 #[cfg(target_arch = "wasm32")]
 pub mod query;
 
+pub mod recent_files;
+
 #[derive(Clone, Default, Debug)]
 pub struct ArchiveLoadStatus {
     pub phase: Option<String>,
@@ -51,9 +53,8 @@ impl ShadingMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum DisplayMode {
-    #[default]
     Off,
     On,
     Only,
@@ -108,17 +109,23 @@ pub struct InspectorState {
     pub triangle_count: usize,
 }
 
-// Generic helper function to check if a value is the default
-// fn is_default<T: Default + PartialEq>(value: &T) -> bool {
-//     value == &T::default()
-// }
-
-#[derive(Default, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct ViewState {
     pub shading_mode: ShadingMode,
     pub vertex_colors: DisplayMode,
     pub collision: DisplayMode,
     pub wireframe: bool,
+}
+
+impl std::default::Default for ViewState {
+    fn default() -> Self {
+        Self {
+            shading_mode: ShadingMode::Unlit,
+            vertex_colors: DisplayMode::On,
+            collision: DisplayMode::Off,
+            wireframe: false,
+        }
+    }
 }
 
 #[derive(Resource, Default, Clone)]

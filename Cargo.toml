@@ -11,6 +11,18 @@ lto = "thin"
 [profile.release.package."*"]
 opt-level = "z"
 
+# Enable a tiny bit of optimization for your own code if needed, 
+# or keep it at 0 for the fastest possible compile times.
+[profile.dev]
+opt-level = 1                # 0 for max compile speed, 1 if your game logic is CPU-heavy
+debug = true
+incremental = true           # Ensure incremental compilation is on
+split-debuginfo = "unpacked" # Speeds up linking significantly on Windows/macOS
+
+# Fully optimize all dependencies (including Bevy, wgpu, etc.)
+[profile.dev.package."*"]
+opt-level = 3
+
 [dependencies]
 bevy_egui = "0.42.0"
 bevy_panorbit_camera = "0.35.1"
@@ -18,10 +30,15 @@ base64 = "0.22"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 wgpu-types = "29.0.4"
-tes3 = { git  = "https://github.com/nicholas477/tes3.git", features = ["esp", "nif", "inspect"] }
+tes3 = { git = "https://github.com/nicholas477/tes3.git", features = [
+    "esp",
+    "nif",
+    "inspect",
+] }
 zip = "8.6.0"
 toml = "1.1.5"
 serde_toml = "0.0.1"
+slotmap = "1.1.1"
 
 [dependencies.bevy]
 version = "0.19.1"
@@ -57,6 +74,9 @@ features = [
     "dds",
     "tga",
 ]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+bevy = { version = "0.19.1", features = ["dynamic_linking"] }
 
 # Desktop dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

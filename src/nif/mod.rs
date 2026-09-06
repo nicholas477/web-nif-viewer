@@ -3,6 +3,7 @@ use tes3::nif::{
     AlphaTestFunction, NiStream, NiTexturingProperty, NiTriShape, TextureMap, TextureSource,
 };
 
+pub mod picking;
 pub mod mesh;
 pub use mesh::*;
 

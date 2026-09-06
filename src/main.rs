@@ -34,17 +34,19 @@ fn main() {
             }),
             InfiniteGridPlugin,
         ))
+        .add_plugins(MeshPickingPlugin)
         .add_plugins(EguiPlugin {
             ..Default::default()
         }) // Hook egui into Bevy's loop
         .add_plugins(MaterialPlugin::<PhongMaterial>::default())
         .add_systems(Startup, setup_system)
         .init_resource::<UIState>()
+        .add_observer(nif::picking::select_mesh)
+        .add_systems(Update, nif::picking::clear_selection_on_viewport_click)
         .add_systems(EguiPrimaryContextPass, ui::ui_system)
         .add_systems(Update, input::input_system);
 
-    #[cfg(target_arch = "wasm32")]
-    app.add_systems(Startup, ui::initialize_from_url);
+    app.add_systems(Startup, ui::initialize_default_mesh);
 
     app.run();
 }

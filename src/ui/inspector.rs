@@ -163,40 +163,6 @@ pub fn draw_node_panel(ui: &mut Ui, state: &crate::UIState) {
         });
 }
 
-/// Converts one line of a pretty Debug value into inspector table columns.
-fn parse_debug_field(line: &str) -> Option<(String, String, String)> {
-    let line = line.trim().trim_end_matches(',');
-    if line.is_empty() || line == "}" || line == "]" {
-        return None;
-    }
-
-    let (name, value) = line.split_once(": ")?;
-    let value_type = if let Some(value_type) = value.strip_suffix(" {") {
-        value_type.to_string()
-    } else if value.starts_with('"') && value.ends_with('"') {
-        "String".to_string()
-    } else if matches!(value, "true" | "false") {
-        "bool".to_string()
-    } else if value.parse::<i64>().is_ok() {
-        "integer".to_string()
-    } else if value.parse::<f64>().is_ok() {
-        "float".to_string()
-    } else if value.starts_with('[') {
-        "array".to_string()
-    } else if let Some((value_type, _)) = value.split_once('(') {
-        value_type.to_string()
-    } else {
-        "value".to_string()
-    };
-
-    Some((name.to_string(), value.to_string(), value_type))
-}
-
-/// Returns the leading whitespace width of a pretty Debug field line.
-fn field_indentation(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
 /// Recursively draws one selectable NIF object and its node children.
 fn draw_object(
     ui: &mut Ui,
