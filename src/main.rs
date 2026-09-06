@@ -28,8 +28,14 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
+                    title: "NIF Viewer".into(),
                     prevent_default_event_handling: false,
                     fit_canvas_to_parent: true,
+                    resize_constraints: WindowResizeConstraints {
+                        min_width: 450.0,
+                        min_height: 300.0,
+                        ..default()
+                    },
                     ..default()
                 }),
                 ..default()
