@@ -3,9 +3,18 @@ name = "esp-viewer"
 version = "0.1.0"
 edition = "2024"
 
+# Something has gotta reduce these binary sizes, fucking hell
 [profile.release]
-opt-level = 's'
-lto = 'thin'
+opt-level = "z"
+strip = "symbols"
+lto = "fat"
+codegen-units = 1
+panic = 'abort'
+
+[profile.release.package."*"]
+opt-level = "z"
+strip = "symbols"
+codegen-units = 1
 
 [dependencies]
 bevy_egui = "0.42.0"
