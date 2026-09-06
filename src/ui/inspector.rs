@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use bevy_egui::egui::{self, Ui};
-use tes3::nif::{Inspect, Property, Visitor};
+use tes3::nif::Inspect;
 
 /// Draws the file list and selectable NIF object hierarchy.
 pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::UIState) -> Option<String> {
@@ -153,7 +153,7 @@ pub fn draw_node_panel(ui: &mut Ui, state: &crate::UIState) {
                     let all_properties = object.object.properties();
 
                     for property in all_properties {
-                        let text = format!("{}", property.value).chars().take(50).collect::<String>();
+                        let text = property.value.to_string().chars().take(50).collect::<String>();
                         ui.label(property.name);
                         ui.label(text);
                         ui.label(property.type_name);

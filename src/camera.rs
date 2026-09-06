@@ -1,5 +1,4 @@
 use bevy::camera::primitives::{Aabb, MeshAabb};
-use bevy::light::cluster::ClusterConfig;
 use bevy::prelude::*;
 pub use bevy_panorbit_camera::PanOrbitCamera;
 
