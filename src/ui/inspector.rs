@@ -129,15 +129,8 @@ pub fn draw_node_panel(ui: &mut Ui, state: &crate::UIState) {
     };
 
     ui.label(format!("{index}: {}", object.type_name));
-    ui.separator();
-    // let direct_field_indentation = object
-    //     .fields
-    //     .lines()
-    //     .filter(|line| line.contains(": "))
-    //     .map(field_indentation)
-    //     .min();
 
-    egui::ScrollArea::vertical()
+    egui::ScrollArea::both()
         .id_salt("nif_node_details_scroll")
         .auto_shrink([false, false])
         .show(ui, |ui| {

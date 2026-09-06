@@ -94,6 +94,7 @@ pub fn ui_system(
     let left_panel = egui::Panel::left("left_panel")
         .default_size(400.0)
         .resizable(true)
+        .min_size(150.0)
         .show(&mut viewport_ui, |ui| {
             inspector::draw(ui, &file_names, &mut state)
         });
