@@ -1,11 +1,17 @@
 use std::{fs, path::Path};
 
 use bevy::prelude::*;
-use directories::ProjectDirs;
 use rfd::FileDialog;
 
 pub fn initialize_default_mesh(mut state: ResMut<crate::UIState>) {
+    state.archive.zip_url_input = super::DEFAULT_MESH.0.to_string();
+    state.archive.pending_file = Some(super::DEFAULT_MESH.1.to_string());
 
+    start_archive_load(
+        state.into_inner(),
+        super::DEFAULT_MESH.0.to_string(),
+        Some(super::DEFAULT_MESH.1.to_string()),
+    );
 }
 
 /// Opens the native ZIP picker and loads the selected archive into the viewer.

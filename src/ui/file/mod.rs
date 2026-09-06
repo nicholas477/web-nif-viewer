@@ -12,7 +12,6 @@ pub use web::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::*;
 
-pub const MAX_RECENT_FILES: usize = 10;
 pub const DEFAULT_MESH: (&str, &str) = (
     "assets/tr_mw_flora_tree_indoril_elm.zip",
     "meshes\\tr\\f\\tr_f_indoril_elm_01.nif",
