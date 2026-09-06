@@ -68,7 +68,7 @@ pub fn open_upload_picker(state: &mut crate::UIState) {
             status.success = None;
         }
         spawn_local(async move {
-            match crate::file::upload_file(file, &status).await {
+            match crate::state::file::upload_file(file, &status).await {
                 Ok(download_url) => {
                     let mut status = status.write().unwrap();
                     status.success = Some("Upload complete. Opening archive...".to_string());
@@ -120,11 +120,11 @@ pub fn start_archive_load(
 /// Fetches an archive asynchronously and publishes its files or error status.
 fn fetch_archive(
     zip_url: String,
-    file_system: crate::file::FS,
+    file_system: crate::state::file::FS,
     load_status: Arc<RwLock<crate::ArchiveLoadStatus>>,
 ) {
     spawn_local(async move {
-        match crate::file::fetch_and_unzip(&zip_url, &load_status).await {
+        match crate::state::file::fetch_and_unzip(&zip_url, &load_status).await {
             Ok(files) => {
                 bevy::log::info!("Zip fetched and parsed successfully.");
                 *file_system.write().unwrap() = files;

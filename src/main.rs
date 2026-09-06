@@ -10,7 +10,6 @@ use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use wgpu_types::BlendState;
 
 mod camera;
-mod file;
 mod input;
 mod material;
 mod nif;

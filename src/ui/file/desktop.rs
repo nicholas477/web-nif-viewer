@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::path::Path;
 
 use bevy::prelude::*;
 use rfd::FileDialog;
@@ -47,10 +47,7 @@ fn load_archive(state: &mut crate::UIState, path: &Path) {
     status.error = None;
     drop(status);
 
-    match fs::read(path)
-        .map_err(crate::file::FileError::IoError)
-        .and_then(|bytes| crate::file::unzip(bytes, &state.archive.archive_load_status))
-    {
+    match crate::state::file::read_archive(path, &state.archive.archive_load_status) {
         Ok(files) => {
             *state.archive.file_system.write().unwrap() = files;
             state.archive.archive_load_status.write().unwrap().phase = None;

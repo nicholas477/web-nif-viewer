@@ -7,6 +7,7 @@ use tes3::nif::NiType;
 #[cfg(target_arch = "wasm32")]
 pub mod query;
 
+pub mod file;
 pub mod recent_files;
 
 #[derive(Clone, Default, Debug)]
@@ -93,7 +94,7 @@ pub struct NifObjectInfo {
 pub struct ArchiveState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
-    pub file_system: crate::file::FS,
+    pub file_system: file::FS,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,

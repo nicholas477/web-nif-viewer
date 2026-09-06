@@ -28,7 +28,7 @@ pub struct LoadedNifWireframe {
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
 pub fn load_nif(
     file_name: &str,
-    file_system: &crate::file::FS,
+    file_system: &crate::state::file::FS,
     nif_objects: &mut Vec<crate::NifObjectInfo>,
     nif_roots: &mut Vec<usize>,
     nif_selected_node: &mut Option<usize>,
@@ -233,7 +233,9 @@ pub fn load_nif(
         }
 
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) = crate::file::find_file(file_system, file_name, &texture_path) {
+            if let Some(texture_bytes) =
+                crate::state::file::find_file(file_system, file_name, &texture_path)
+            {
                 let extension = texture_path
                     .rsplit('.')
                     .next()
