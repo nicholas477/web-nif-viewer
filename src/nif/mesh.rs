@@ -71,6 +71,7 @@ pub fn load_nif(
         .map(|(_, object)| crate::NifObjectInfo {
             type_name: String::from_utf8_lossy(object.type_name()).into_owned(),
             fields: format!("{object:#?}"),
+            object: object.clone(),
             children: {
                 let mut children = Vec::new();
                 object.visitor(&mut |link| {
@@ -82,6 +83,7 @@ pub fn load_nif(
             },
         })
         .collect();
+
     *nif_roots = stream
         .roots
         .iter()

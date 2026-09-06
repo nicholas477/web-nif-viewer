@@ -9,12 +9,12 @@ lto = 'thin'
 
 [dependencies]
 bevy_egui = "0.42.0"
-bevy_panorbit_camera = { git = "https://github.com/nicholas477/bevy_panorbit_camera.git" }
+bevy_panorbit_camera = "0.35.1"
 base64 = "0.22"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 wgpu-types = "29.0.4"
-tes3 = { git = "https://github.com/Greatness7/tes3", features = ["esp", "nif"] }
+tes3 = { git  = "https://github.com/nicholas477/tes3.git", features = ["esp", "nif", "inspect"] }
 zip = "8.6.0"
 toml = "1.1.5"
 serde_toml = "0.0.1"

@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
+use tes3::nif::NiType;
 
 // URL query state, only on wasm
 #[cfg(target_arch = "wasm32")]
@@ -83,6 +84,7 @@ pub struct ViewOptions {
 pub struct NifObjectInfo {
     pub type_name: String,
     pub fields: String,
+    pub object: NiType,
     pub children: Vec<usize>,
 }
 
