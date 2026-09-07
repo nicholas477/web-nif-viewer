@@ -1,10 +1,7 @@
-use std::sync::{Arc, RwLock};
 
-use crate::state::query;
 use bevy::prelude::*;
 
-use wasm_bindgen::{JsCast, closure::Closure};
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::JsCast;
 
 const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
 

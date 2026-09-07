@@ -1,6 +1,6 @@
-#[build]
+[build]
 # Automatically target WebAssembly for all cargo build commands in this project
-#target = "wasm32-unknown-unknown"
+target = "wasm32-unknown-unknown"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"

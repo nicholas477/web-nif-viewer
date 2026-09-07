@@ -1,13 +1,41 @@
 mod file;
 mod inspector;
+mod top_panel;
 
-#[cfg(target_arch = "wasm32")]
-use crate::state::query;
-use bevy::{camera::Viewport, prelude::*, window::PrimaryWindow};
+use bevy::{camera::Viewport, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
 
 pub use file::initialize_default_mesh;
+
+// #[derive(SystemParam)]
+// pub struct UiSystemParams<'w, 's> {
+//     pub state: ResMut<'w, crate::state::UIState>,
+//     pub fsstate: ResMut<'w, crate::state::FSState>,
+//     pub commands: Commands<'w, 's>,
+//     pub camera: Single<'w, 's, &'static mut Camera, Without<EguiContext>>,
+//     pub camera3d: Single<'w, 's, (
+//         &'static mut Camera3d,
+//         &'static Projection,
+//         &'static mut crate::camera::PanOrbitCamera,
+//     ), Without<EguiContext>>,
+//     pub window: Single<'w, 's, &'static mut Window, With<PrimaryWindow>>,
+//     pub meshes: ResMut<'w, Assets<Mesh>>,
+//     pub images: ResMut<'w, Assets<Image>>,
+//     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
+//     pub loaded_meshes: Query<'w, 's, Entity, With<crate::nif::LoadedNifMesh>>,
+//     pub loaded_materials: Query<'w, 's, (
+//         &'static mut Mesh3d,
+//         &'static MeshMaterial3d<crate::PhongMaterial>,
+//         &'static mut Visibility,
+//         &'static crate::nif::LoadedNifMesh,
+//     ), Without<crate::nif::LoadedNifWireframe>>,
+//     pub loaded_wireframes: Query<'w, 's, (
+//         &'static mut Visibility,
+//         &'static crate::nif::LoadedNifWireframe,
+//     ), Without<crate::nif::LoadedNifMesh>>,
+//     pub loaded_wireframe_entities: Query<'w, 's, Entity, With<crate::nif::LoadedNifWireframe>>,
+// }
 
 /// Draws the viewer UI, processes file selection, and updates the 3D viewport bounds.
 pub fn ui_system(
@@ -52,11 +80,7 @@ pub fn ui_system(
             .layer_id(LayerId::background())
             .max_rect(ctx.viewport_rect()),
     );
-    let file_names = fsstate
-        .file_system
-        .read()
-        .unwrap()
-        .paths();
+    let file_names = fsstate.file_system.read().unwrap().paths();
     let window = window.into_inner().into_inner();
     let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
@@ -103,7 +127,7 @@ pub fn ui_system(
         && file_name.to_lowercase().ends_with(".nif")
     {
         #[cfg(target_arch = "wasm32")]
-        query::update_query(&crate::state::query::QueryState {
+        crate::state::query::update_query(&crate::state::query::QueryState {
             zip_url: state.archive.zip_url_input.clone(),
             selected_file: file_name.clone(),
             view_state: state.view.clone(),
@@ -126,35 +150,17 @@ pub fn ui_system(
     }
 
     // Top panel
-    let top = egui::Panel::top("top_panel")
-        .resizable(false)
-        .show(&mut viewport_ui, |ui| {
-            ui.horizontal(|ui| {
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("Load URL").clicked() {
-                    file::open_archive_picker(&mut state, &mut fsstate);
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("Open File").clicked() {
-                    file::open_archive_picker(&mut state, &mut fsstate);
-                }
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("Upload File").clicked() {
-                    file::open_upload_picker(&mut state);
-                }
-                file::draw_recent_menu(ui, &mut state, &mut fsstate);
-                draw_view_controls(
-                    ui,
-                    &mut state,
-                    &mut materials,
-                    &mut loaded_materials,
-                    &mut loaded_wireframes,
-                );
-            });
-        })
-        .response
-        .rect
-        .height();
+    let top = top_panel::top_panel(
+        &mut viewport_ui,
+        &mut state,
+        &mut fsstate,
+        materials,
+        loaded_materials,
+        loaded_wireframes,
+    )
+    .response
+    .rect
+    .height();
 
     left *= window.scale_factor();
     let top = top * window.scale_factor();
@@ -259,81 +265,4 @@ fn load_nif(
         }
         Err(error) => state.archive.nif_load_error = Some(error),
     }
-}
-
-/// Draws composable rendering controls and applies changed options to loaded entities.
-fn draw_view_controls(
-    ui: &mut Ui,
-    state: &mut crate::state::UIState,
-    materials: &mut Assets<crate::PhongMaterial>,
-    loaded_meshes: &mut Query<
-        (
-            &mut Mesh3d,
-            &MeshMaterial3d<crate::PhongMaterial>,
-            &mut Visibility,
-            &crate::nif::LoadedNifMesh,
-        ),
-        Without<crate::nif::LoadedNifWireframe>,
-    >,
-    loaded_wireframes: &mut Query<
-        (&mut Visibility, &crate::nif::LoadedNifWireframe),
-        Without<crate::nif::LoadedNifMesh>,
-    >,
-) {
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let previous_options = crate::ViewOptions::from(&*state);
-
-        ui.label(format!("{} triangles", state.inspector.triangle_count));
-        ui.checkbox(&mut state.view.wireframe, "Wireframe");
-        egui::ComboBox::from_label("Collision")
-            .selected_text(state.view.collision.label())
-            .show_ui(ui, |ui| {
-                for mode in crate::DisplayMode::ALL {
-                    ui.selectable_value(&mut state.view.collision, mode, mode.label());
-                }
-            });
-
-        ui.add_enabled_ui(
-            state.view.shading_mode != crate::ShadingMode::Normals,
-            |ui| {
-                egui::ComboBox::from_label("Vertex colors")
-                    .selected_text(state.view.vertex_colors.label())
-                    .show_ui(ui, |ui| {
-                        for mode in crate::DisplayMode::ALL {
-                            ui.selectable_value(&mut state.view.vertex_colors, mode, mode.label());
-                        }
-                    });
-            },
-        );
-
-        for mode in [
-            crate::ShadingMode::Normals,
-            crate::ShadingMode::Unlit,
-            crate::ShadingMode::Lit,
-        ] {
-            ui.selectable_value(&mut state.view.shading_mode, mode, mode.label());
-        }
-
-        let view_options = crate::ViewOptions::from(&*state);
-        if view_options != previous_options {
-            crate::nif::apply_view_options(
-                view_options,
-                materials,
-                loaded_meshes,
-                loaded_wireframes,
-            );
-
-            #[cfg(target_arch = "wasm32")]
-            query::update_query(&query::QueryState {
-                zip_url: state.archive.zip_url_input.clone(),
-                selected_file: state
-                    .archive
-                    .selected_file
-                    .as_deref()
-                    .map(|s| s.into())
-                    .unwrap_or_default(),
-                view_state: state.view.clone(),
-            });
-        }
-    });
 }
