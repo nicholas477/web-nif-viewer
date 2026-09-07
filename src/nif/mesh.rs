@@ -28,7 +28,7 @@ pub struct LoadedNifWireframe {
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
 pub fn load_nif(
     file_name: &str,
-    file_system: &crate::state::file::FS,
+    file_system: &dyn crate::state::file::Filesystem,
     nif_objects: &mut Vec<crate::NifObjectInfo>,
     nif_roots: &mut Vec<usize>,
     nif_selected_node: &mut Option<usize>,
@@ -44,8 +44,7 @@ pub fn load_nif(
     bevy::log::info!("Loading NIF file: {file_name}");
 
     let file_bytes = {
-        let file_system = file_system.read().unwrap();
-        file_system.get(file_name).cloned()
+        file_system.read(file_name).map(|b| b.to_vec())
     };
 
     let Some(file_bytes) = file_bytes else {

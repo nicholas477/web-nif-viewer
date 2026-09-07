@@ -41,7 +41,7 @@ pub fn ui_system(
         Without<crate::nif::LoadedNifMesh>,
     >,
     loaded_wireframe_entities: Query<Entity, With<crate::nif::LoadedNifWireframe>>,
-    mut state: ResMut<crate::UIState>,
+    mut state: ResMut<crate::state::UIState>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut viewport_ui = Ui::new(
@@ -56,9 +56,7 @@ pub fn ui_system(
         .file_system
         .read()
         .unwrap()
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
+        .paths();
     let window = window.into_inner().into_inner();
     let (_, projection, mut pan_orbit) = camera3d.into_inner();
 
@@ -177,7 +175,7 @@ pub fn ui_system(
 #[allow(clippy::too_many_arguments)]
 /// Loads a requested NIF once its containing archive has made the file available.
 fn load_pending_nif(
-    state: &mut crate::UIState,
+    state: &mut crate::state::UIState,
     file_names: &[String],
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -216,7 +214,7 @@ fn load_pending_nif(
 /// Loads a NIF into Bevy assets, records failures, and frames the camera on success.
 fn load_nif(
     file_name: &str,
-    state: &mut crate::UIState,
+    state: &mut crate::state::UIState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
@@ -232,7 +230,7 @@ fn load_nif(
     let inspector = &mut state.inspector;
     match crate::nif::load_nif(
         file_name,
-        &file_system,
+        file_system.read().unwrap().as_ref() as &dyn crate::state::file::Filesystem,
         &mut inspector.nif_objects,
         &mut inspector.nif_roots,
         &mut inspector.selected_node,
@@ -256,7 +254,7 @@ fn load_nif(
 /// Draws composable rendering controls and applies changed options to loaded entities.
 fn draw_view_controls(
     ui: &mut Ui,
-    state: &mut crate::UIState,
+    state: &mut crate::state::UIState,
     materials: &mut Assets<crate::PhongMaterial>,
     loaded_meshes: &mut Query<
         (

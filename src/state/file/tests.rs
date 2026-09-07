@@ -1,13 +1,13 @@
 
 use super::*;
 
-fn file_system(paths: &[(&str, &[u8])]) -> FS {
-    Arc::new(RwLock::new(
+fn file_system(paths: &[(&str, &[u8])]) -> HashmapFS {
+    HashmapFS::new(
         paths
             .iter()
             .map(|(path, bytes)| (normalize_path(path), bytes.to_vec()))
             .collect(),
-    ))
+    )
 }
 
 #[test]

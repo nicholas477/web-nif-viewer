@@ -90,16 +90,31 @@ pub struct NifObjectInfo {
     pub children: Vec<usize>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ArchiveState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
-    pub file_system: file::FS,
+    pub file_system: Arc<RwLock<Box<dyn crate::state::file::Filesystem>>>,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
     pub nif_load_error: Option<String>,
     pub upload_status: Arc<RwLock<UploadStatus>>,
+}
+
+impl Default for ArchiveState {
+    fn default() -> Self {
+        Self {
+            show_zip_popup: false,
+            zip_url_input: String::new(),
+            file_system: Arc::new(RwLock::new(Box::new(crate::state::file::NullFS))),
+            selected_file: None,
+            pending_file: None,
+            archive_load_status: Arc::new(RwLock::new(ArchiveLoadStatus::default())),
+            nif_load_error: None,
+            upload_status: Arc::new(RwLock::new(UploadStatus::default())),
+        }
+    }
 }
 
 #[derive(Default, Clone)]

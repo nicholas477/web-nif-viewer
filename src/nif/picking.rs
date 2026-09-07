@@ -18,7 +18,7 @@ pub fn select_mesh(
         Without<crate::nif::LoadedNifMesh>,
     >,
     mut materials: ResMut<Assets<crate::PhongMaterial>>,
-    mut state: ResMut<crate::UIState>,
+    mut state: ResMut<crate::state::UIState>,
 ) {
     let Ok(mesh) = meshes.get(event.entity) else {
         return;
@@ -47,7 +47,7 @@ pub fn clear_selection_on_viewport_click(
         Without<crate::nif::LoadedNifMesh>,
     >,
     mut materials: ResMut<Assets<crate::PhongMaterial>>,
-    mut state: ResMut<crate::UIState>,
+    mut state: ResMut<crate::state::UIState>,
 ) {
     if !mouse_buttons.read().any(|event| {
         event.button == MouseButton::Left && event.state == ButtonState::Pressed
@@ -87,7 +87,7 @@ fn set_wireframe_highlight(
         Without<crate::nif::LoadedNifMesh>,
     >,
     materials: &mut Assets<crate::PhongMaterial>,
-    state: &crate::UIState,
+    state: &crate::state::UIState,
     selected_node: Option<usize>,
 ) {
     for (wireframe, material_handle, mut visibility) in wireframes.iter_mut() {

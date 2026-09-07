@@ -40,7 +40,7 @@ fn load_archive(state: &mut crate::UIState, path: &Path) {
     let archive_path = path.display().to_string();
     state.archive.zip_url_input = archive_path.clone();
     state.archive.selected_file = None;
-    *state.archive.file_system.write().unwrap() = Default::default();
+    //*state.archive.file_system.write().unwrap() = Default::default();
 
     let mut status = state.archive.archive_load_status.write().unwrap();
     status.phase = Some("Opening archive...".to_string());
@@ -49,7 +49,7 @@ fn load_archive(state: &mut crate::UIState, path: &Path) {
 
     match crate::state::file::read_archive(path, &state.archive.archive_load_status) {
         Ok(files) => {
-            *state.archive.file_system.write().unwrap() = files;
+            *state.archive.file_system.write().unwrap() = Box::new(crate::state::file::HashmapFS::new(files));
             state.archive.archive_load_status.write().unwrap().phase = None;
         }
         Err(error) => {

@@ -18,7 +18,7 @@ pub const DEFAULT_MESH: (&str, &str) = (
 );
 
 /// Draws the current archive download/extraction progress indicator.
-pub fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
+pub fn draw_load_status(ctx: &egui::Context, state: &crate::state::UIState) {
     let status = state.archive.archive_load_status.read().unwrap();
     let Some(phase) = status.phase.as_deref() else {
         return;
@@ -37,7 +37,7 @@ pub fn draw_load_status(ctx: &egui::Context, state: &crate::UIState) {
 }
 
 /// Displays and clears the highest-priority archive, NIF, or upload error.
-pub fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
+pub fn draw_error_popup(ctx: &egui::Context, state: &mut crate::state::UIState) {
     let archive_error = state
         .archive
         .archive_load_status
@@ -72,7 +72,7 @@ pub fn draw_error_popup(ctx: &egui::Context, state: &mut crate::UIState) {
 }
 
 /// Draws the current archive upload progress indicator.
-pub fn draw_upload_status(ctx: &egui::Context, state: &crate::UIState) {
+pub fn draw_upload_status(ctx: &egui::Context, state: &crate::state::UIState) {
     let status = state.archive.upload_status.read().unwrap();
     let Some(phase) = status.phase.as_deref() else {
         return;
@@ -91,7 +91,7 @@ pub fn draw_upload_status(ctx: &egui::Context, state: &crate::UIState) {
 }
 
 /// Displays the upload completion message until the user dismisses it.
-pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState) {
+pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::state::UIState) {
     let success = state.archive.upload_status.read().unwrap().success.clone();
     let Some(success) = success else {
         return;
@@ -111,7 +111,7 @@ pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::UIState)
 }
 
 /// Draws recent archive/file pairs and starts loading the selected entry.
-pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::UIState) {
+pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::state::UIState) {
     ui.menu_button("Recent", |ui| {
         let recent_files = crate::state::recent_files::recent_files();
         if recent_files.files.is_empty() {

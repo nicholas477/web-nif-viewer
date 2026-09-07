@@ -21,7 +21,44 @@ use std::{
 };
 use zip::ZipArchive;
 
-pub type FS = Arc<RwLock<HashMap<String, Vec<u8>>>>;
+pub struct NullFS;
+
+impl Filesystem for NullFS {
+    fn read(&self, _path: &str) -> Option<&[u8]> {
+        None
+    }
+
+    fn paths(&self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct HashmapFS {
+    inner: HashMap<String, Vec<u8>>
+}
+
+impl HashmapFS {
+    pub fn new(inner: HashMap<String, Vec<u8>>) -> Self {
+        Self { inner }
+    }
+}
+
+pub trait Filesystem: Sync + Send {
+    fn read(&self, path: &str) -> Option<&[u8]>;
+    fn paths(&self) -> Vec<String>;
+}
+
+impl Filesystem for HashmapFS {
+    fn read(&self, path: &str) -> Option<&[u8]> {
+        self.inner.get(path).map(|v| v.as_slice())
+    }
+
+    fn paths(&self) -> Vec<String> {
+        self.inner.keys().cloned().collect()
+    }
+}
+
 pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;
 
 #[derive(Debug)]
@@ -91,12 +128,12 @@ pub fn unzip(
 
 /// Finds a NIF asset reference relative to its source file, searching each ancestor directory.
 pub fn find_file(
-    file_system: &FS,
+    file_system: &dyn Filesystem,
     source_path: &str,
     requested_path: &str,
 ) -> Option<Vec<u8>> {
     let requested_path = requested_path.replace('/', "\\");
-    let file_system = file_system.read().ok()?;
+    //let file_system = file_system.read().ok()?;
 
     for directory in ancestor_directories(source_path) {
         let candidate = if directory.is_empty() {
@@ -104,8 +141,8 @@ pub fn find_file(
         } else {
             normalize_path(&format!("{directory}\\{requested_path}"))
         };
-        if let Some(bytes) = file_system.get(&candidate) {
-            return Some(bytes.clone());
+        if let Some(bytes) = file_system.read(&candidate) {
+            return Some(bytes.to_vec());
         }
     }
 

@@ -4,7 +4,7 @@ use bevy_egui::egui::{self, Ui};
 use tes3::nif::Inspect;
 
 /// Draws the file list and selectable NIF object hierarchy.
-pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::UIState) -> Option<String> {
+pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::state::UIState) -> Option<String> {
     ui.heading("Files");
     ui.separator();
 
@@ -115,7 +115,7 @@ pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::UIState) -> O
 }
 
 /// Draws details for the selected object below the NIF hierarchy.
-pub fn draw_node_panel(ui: &mut Ui, state: &crate::UIState) {
+pub fn draw_node_panel(ui: &mut Ui, state: &crate::state::UIState) {
     ui.heading("Node");
     ui.separator();
 
