@@ -2,14 +2,15 @@ use std::sync::{Arc, RwLock};
 
 use crate::state::query;
 use bevy::prelude::*;
-
+use bevy_egui::egui;
 use wasm_bindgen::{JsCast, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 
-const RECENT_FILES_COOKIE: &str = "esp_viewer_recent_files";
-
 /// Initializes archive and selected-file state from the URL or default mesh.
-pub fn initialize_default_mesh(mut state: ResMut<crate::UIState>) {
+pub fn initialize_default_mesh(
+    mut state: ResMut<crate::UIState>,
+    fsstate: ResMut<crate::state::FSState>,
+) {
     let query_state =
         crate::state::query::query_state().unwrap_or_else(|| crate::state::query::QueryState {
             zip_url: super::DEFAULT_MESH.0.to_string(),
@@ -21,13 +22,13 @@ pub fn initialize_default_mesh(mut state: ResMut<crate::UIState>) {
     state.archive.pending_file = Some(query_state.selected_file);
     fetch_archive(
         query_state.zip_url,
-        state.archive.file_system.clone(),
+        fsstate.file_system.clone(),
         state.archive.archive_load_status.clone(),
     );
 }
 
 /// Opens the browser archive URL dialog.
-pub fn open_archive_picker(state: &mut crate::UIState) {
+pub fn open_archive_picker(state: &mut crate::UIState, _fsstate: &mut crate::state::FSState) {
     state.archive.show_zip_popup = true;
 }
 
@@ -90,6 +91,7 @@ pub fn open_upload_picker(state: &mut crate::UIState) {
 /// Clears the current archive and asynchronously begins loading a new one.
 pub fn start_archive_load(
     state: &mut crate::UIState,
+    fsstate: &mut crate::state::FSState,
     zip_url: String,
     pending_file: Option<String>,
 ) {
@@ -104,7 +106,7 @@ pub fn start_archive_load(
     state.archive.zip_url_input = zip_url.clone();
     state.archive.selected_file = None;
     state.archive.pending_file = pending_file;
-    *state.archive.file_system.write().unwrap() = Default::default();
+    fsstate.set_filesystem(Box::new(crate::state::file::NullFS));
     {
         let mut status = state.archive.archive_load_status.write().unwrap();
         status.phase = Some("Preparing download...".to_string());
@@ -112,7 +114,7 @@ pub fn start_archive_load(
     }
     fetch_archive(
         zip_url,
-        state.archive.file_system.clone(),
+        fsstate.file_system.clone(),
         state.archive.archive_load_status.clone(),
     );
 }
@@ -120,14 +122,15 @@ pub fn start_archive_load(
 /// Fetches an archive asynchronously and publishes its files or error status.
 fn fetch_archive(
     zip_url: String,
-    file_system: crate::state::file::FS,
+    file_system: Arc<RwLock<Box<dyn crate::state::file::Filesystem>>>,
     load_status: Arc<RwLock<crate::ArchiveLoadStatus>>,
 ) {
     spawn_local(async move {
         match crate::state::file::fetch_and_unzip(&zip_url, &load_status).await {
             Ok(files) => {
                 bevy::log::info!("Zip fetched and parsed successfully.");
-                *file_system.write().unwrap() = files;
+                *file_system.write().unwrap() =
+                    Box::new(crate::state::file::HashmapFS::new_from_vec(files));
             }
             Err(error) => {
                 let message = error.to_string();
@@ -138,4 +141,31 @@ fn fetch_archive(
             }
         }
     });
+}
+
+/// Draws the modal used to enter an archive URL.
+pub fn draw_zip_popup(
+    ctx: &egui::Context,
+    state: &mut crate::UIState,
+    fsstate: &mut crate::state::FSState,
+) {
+    egui::Window::new("Load Compressed Archive")
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.label("Enter the direct URL of the target .zip archive:");
+            ui.text_edit_singleline(&mut state.archive.zip_url_input);
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Download & Extract").clicked() {
+                    let url = state.archive.zip_url_input.clone();
+                    start_archive_load(state, fsstate, url, None);
+                    state.archive.show_zip_popup = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    state.archive.show_zip_popup = false;
+                }
+            });
+        });
 }

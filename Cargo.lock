@@ -226,6 +226,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-slice"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f55bfcb612be7dde478052f4067f400502245aaa2675acaa263d2496b5a1541"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1979,6 +1988,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "browser-fs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c6ad0d6babb0e8180374f3d68558086ba1fdbb90a96bedecad64bb4aa2ec1d8"
+dependencies = [
+ "futures-lite",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2854,10 +2876,12 @@ dependencies = [
 name = "esp-viewer"
 version = "0.1.0"
 dependencies = [
+ "arc-slice",
  "base64",
  "bevy",
  "bevy_egui",
  "bevy_panorbit_camera",
+ "browser-fs",
  "directories",
  "js-sys",
  "rfd",
@@ -3824,6 +3848,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce57d20d1ea864ce2ac172ab472d409214f4fd359f0b2a2775abdf522e2af99e"
 dependencies = [
  "cfg-if",
+ "futures-core",
  "futures-util",
  "wasm-bindgen",
 ]

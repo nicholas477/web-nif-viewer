@@ -48,6 +48,7 @@ fn main() {
         .add_plugins(MaterialPlugin::<PhongMaterial>::default())
         .add_systems(Startup, setup_system)
         .init_resource::<UIState>()
+        .init_resource::<FSState>()
         .add_observer(nif::picking::select_mesh)
         .add_systems(Update, nif::picking::clear_selection_on_viewport_click)
         .add_systems(EguiPrimaryContextPass, ui::ui_system)

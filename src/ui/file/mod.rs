@@ -111,7 +111,11 @@ pub fn draw_upload_result_popup(ctx: &egui::Context, state: &mut crate::state::U
 }
 
 /// Draws recent archive/file pairs and starts loading the selected entry.
-pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::state::UIState) {
+pub fn draw_recent_menu(
+    ui: &mut egui::Ui,
+    state: &mut crate::state::UIState,
+    fsstate: &mut crate::state::FSState,
+) {
     ui.menu_button("Recent", |ui| {
         let recent_files = crate::state::recent_files::recent_files();
         if recent_files.files.is_empty() {
@@ -145,33 +149,9 @@ pub fn draw_recent_menu(ui: &mut egui::Ui, state: &mut crate::state::UIState) {
             ui.add_space(4.0);
 
             if file_name_response.inner.clicked() {
-                start_archive_load(state, zip_url, Some(file_name));
+                start_archive_load(state, fsstate, zip_url, Some(file_name));
                 ui.close();
             }
         }
     });
-}
-
-/// Draws the modal used to enter an archive URL.
-#[cfg(target_arch = "wasm32")]
-pub fn draw_zip_popup(ctx: &egui::Context, state: &mut crate::UIState) {
-    egui::Window::new("Load Compressed Archive")
-        .resizable(false)
-        .collapsible(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.label("Enter the direct URL of the target .zip archive:");
-            ui.text_edit_singleline(&mut state.archive.zip_url_input);
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui.button("Download & Extract").clicked() {
-                    let url = state.archive.zip_url_input.clone();
-                    start_archive_load(state, url, None);
-                    state.archive.show_zip_popup = false;
-                }
-                if ui.button("Cancel").clicked() {
-                    state.archive.show_zip_popup = false;
-                }
-            });
-        });
 }

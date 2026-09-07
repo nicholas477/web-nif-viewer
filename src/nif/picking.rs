@@ -47,7 +47,7 @@ pub fn clear_selection_on_viewport_click(
         Without<crate::nif::LoadedNifMesh>,
     >,
     mut materials: ResMut<Assets<crate::PhongMaterial>>,
-    mut state: ResMut<crate::state::UIState>,
+    state: ResMut<crate::state::UIState>,
 ) {
     if !mouse_buttons.read().any(|event| {
         event.button == MouseButton::Left && event.state == ButtonState::Pressed

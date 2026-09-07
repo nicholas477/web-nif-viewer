@@ -10,6 +10,10 @@ pub use web::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::*;
 
+mod types;
+
+pub use types::*;
+
 #[cfg(test)]
 mod tests;
 
@@ -20,43 +24,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 use zip::ZipArchive;
-
-pub struct NullFS;
-
-impl Filesystem for NullFS {
-    fn read(&self, _path: &str) -> Option<&[u8]> {
-        None
-    }
-
-    fn paths(&self) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct HashmapFS {
-    inner: HashMap<String, Vec<u8>>
-}
-
-impl HashmapFS {
-    pub fn new(inner: HashMap<String, Vec<u8>>) -> Self {
-        Self { inner }
-    }
-}
+use arc_slice::ArcSlice;
 
 pub trait Filesystem: Sync + Send {
-    fn read(&self, path: &str) -> Option<&[u8]>;
+    fn read(&self, path: &str) -> Option<ArcSlice<[u8]>>;
     fn paths(&self) -> Vec<String>;
-}
-
-impl Filesystem for HashmapFS {
-    fn read(&self, path: &str) -> Option<&[u8]> {
-        self.inner.get(path).map(|v| v.as_slice())
-    }
-
-    fn paths(&self) -> Vec<String> {
-        self.inner.keys().cloned().collect()
-    }
 }
 
 pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;

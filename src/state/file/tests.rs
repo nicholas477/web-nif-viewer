@@ -5,7 +5,7 @@ fn file_system(paths: &[(&str, &[u8])]) -> HashmapFS {
     HashmapFS::new(
         paths
             .iter()
-            .map(|(path, bytes)| (normalize_path(path), bytes.to_vec()))
+            .map(|(path, bytes)| (normalize_path(path), ArcSlice::from(*bytes)))
             .collect(),
     )
 }

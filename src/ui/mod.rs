@@ -42,6 +42,7 @@ pub fn ui_system(
     >,
     loaded_wireframe_entities: Query<Entity, With<crate::nif::LoadedNifWireframe>>,
     mut state: ResMut<crate::state::UIState>,
+    mut fsstate: ResMut<crate::state::FSState>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let mut viewport_ui = Ui::new(
@@ -51,8 +52,7 @@ pub fn ui_system(
             .layer_id(LayerId::background())
             .max_rect(ctx.viewport_rect()),
     );
-    let file_names = state
-        .archive
+    let file_names = fsstate
         .file_system
         .read()
         .unwrap()
@@ -72,11 +72,12 @@ pub fn ui_system(
     };
     #[cfg(target_arch = "wasm32")]
     if let Some(download_url) = uploaded_download_url {
-        file::start_archive_load(&mut state, download_url, None);
+        file::start_archive_load(&mut state, &mut fsstate, download_url, None);
     }
 
     load_pending_nif(
         &mut state,
+        &fsstate,
         &file_names,
         &mut commands,
         &mut meshes,
@@ -111,6 +112,7 @@ pub fn ui_system(
         load_nif(
             &file_name,
             &mut state,
+            &fsstate,
             &mut commands,
             &mut meshes,
             &mut images,
@@ -123,18 +125,24 @@ pub fn ui_system(
         );
     }
 
+    // Top panel
     let top = egui::Panel::top("top_panel")
         .resizable(false)
         .show(&mut viewport_ui, |ui| {
             ui.horizontal(|ui| {
+                #[cfg(target_arch = "wasm32")]
+                if ui.button("Load URL").clicked() {
+                    file::open_archive_picker(&mut state, &mut fsstate);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Open File").clicked() {
-                    file::open_archive_picker(&mut state);
+                    file::open_archive_picker(&mut state, &mut fsstate);
                 }
                 #[cfg(target_arch = "wasm32")]
                 if ui.button("Upload File").clicked() {
                     file::open_upload_picker(&mut state);
                 }
-                file::draw_recent_menu(ui, &mut state);
+                file::draw_recent_menu(ui, &mut state, &mut fsstate);
                 draw_view_controls(
                     ui,
                     &mut state,
@@ -163,7 +171,7 @@ pub fn ui_system(
 
     #[cfg(target_arch = "wasm32")]
     if state.archive.show_zip_popup {
-        file::draw_zip_popup(ctx, &mut state);
+        file::draw_zip_popup(ctx, &mut state, &mut fsstate);
     }
     file::draw_load_status(ctx, &state);
     file::draw_upload_status(ctx, &state);
@@ -176,6 +184,7 @@ pub fn ui_system(
 /// Loads a requested NIF once its containing archive has made the file available.
 fn load_pending_nif(
     state: &mut crate::state::UIState,
+    fsstate: &crate::state::FSState,
     file_names: &[String],
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -198,6 +207,7 @@ fn load_pending_nif(
     load_nif(
         &file_name,
         state,
+        fsstate,
         commands,
         meshes,
         images,
@@ -215,6 +225,7 @@ fn load_pending_nif(
 fn load_nif(
     file_name: &str,
     state: &mut crate::state::UIState,
+    fsstate: &crate::state::FSState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
@@ -225,12 +236,11 @@ fn load_nif(
     window: &Window,
     pan_orbit: &mut crate::camera::PanOrbitCamera,
 ) {
-    let file_system = state.archive.file_system.clone();
     let view_options = crate::ViewOptions::from(&*state);
     let inspector = &mut state.inspector;
     match crate::nif::load_nif(
         file_name,
-        file_system.read().unwrap().as_ref() as &dyn crate::state::file::Filesystem,
+        fsstate.file_system.read().unwrap().as_ref() as &dyn crate::state::file::Filesystem,
         &mut inspector.nif_objects,
         &mut inspector.nif_roots,
         &mut inspector.selected_node,

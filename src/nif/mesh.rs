@@ -4,7 +4,7 @@ use bevy::image::{
 };
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiCollisionSwitch, NiKey, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode, Visitor,
+    NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode, Visitor,
 };
 
 use crate::nif::*;
