@@ -133,6 +133,12 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
     if params.state.archive.show_zip_popup {
         file::draw_zip_popup(&ctx, &mut params.state, &mut params.fsstate);
     }
+
+    #[cfg(target_arch = "wasm32")]
+    if params.state.top_panel.show_nif_popup {
+        file::draw_file_popup(&ctx, &mut params);
+    }
+
     file::draw_load_status(&ctx, &params.state);
     file::draw_upload_status(&ctx, &params.state);
     file::draw_error_popup(&ctx, &mut params.state);

@@ -1,8 +1,21 @@
-use std::{collections::HashMap, fs::File, sync::RwLock};
+use std::{collections::HashMap, sync::RwLock};
 
 use super::{Filesystem};
 use arc_slice::ArcSlice;
 use bevy::platform::collections::HashSet;
+
+#[cfg(target_arch = "wasm32")]
+mod web;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod desktop;
+
+#[cfg(target_arch = "wasm32")]
+pub use web::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use desktop::*;
+
 
 /// A filesystem implementation that contains no data and always returns no files.
 pub struct NullFS;
@@ -45,49 +58,6 @@ impl Filesystem for HashmapFS {
 
     fn paths(&self) -> Vec<String> {
         self.inner.keys().cloned().collect()
-    }
-}
-
-/// A filesystem implementation that reads files from the real filesystem and caches them in memory.
-#[derive(Default)]
-pub struct RealFS {
-    /// Base path to add to all file lookups
-    base: String,
-
-    /// Inner hash map storing the file data in memory
-    inner: RwLock<HashMap<String, ArcSlice<[u8]>>>
-}
-
-impl RealFS {
-    pub fn new(base: String) -> Self {
-        Self {
-            base,
-            inner: RwLock::new(HashMap::new()),
-        }
-    }
-}
-
-impl Filesystem for RealFS {
-    fn read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
-        let full_path = format!("{}/{}", self.base, path);
-        if let Some(data) = self.inner.read().unwrap().get(&full_path).cloned() {
-            return Some(data);
-        }
-        
-        if let Ok(mut file) = File::open(&full_path) {
-            use std::io::Read;
-            let mut buffer = Vec::new();
-            if file.read_to_end(&mut buffer).is_ok() {
-                let data = ArcSlice::from(buffer.as_slice());
-                self.inner.write().unwrap().insert(full_path, data.clone());
-                return Some(data);
-            }
-        }
-        None
-    }
-
-    fn paths(&self) -> Vec<String> {
-        self.inner.read().unwrap().keys().cloned().collect()
     }
 }
 

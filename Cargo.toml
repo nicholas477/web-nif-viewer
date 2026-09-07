@@ -40,6 +40,7 @@ toml = "1.1.5"
 serde_toml = "0.0.1"
 slotmap = "1.1.1"
 arc-slice = "0.1.0"
+async-trait = "0.1.92"
 
 [dependencies.bevy]
 version = "0.19.1"
@@ -96,6 +97,11 @@ web-sys = { version = "0.3", features = [
     "EventTarget",
     "File",
     "FileList",
+    "FileSystemDirectoryHandle",
+    "FileSystemHandle",
+    "FileSystemFileHandle",
+    "FileSystemGetFileOptions",
+    "FileSystemGetDirectoryOptions",
     "FormData",
     "History",
     "HtmlDocument",
@@ -107,5 +113,12 @@ web-sys = { version = "0.3", features = [
     "Url",
     "UrlSearchParams",
     "Window",
+    "PermissionState",
+    "IdbFactory",
+    "IdbOpenDbRequest",
+    "IdbDatabase",
+    "IdbTransaction",
+    "IdbObjectStore",
+    "IdbRequest",
 ] }
 js-sys = "0.3.104"

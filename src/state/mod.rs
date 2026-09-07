@@ -129,10 +129,16 @@ impl std::default::Default for ViewState {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct TopPanelState {
+    pub show_nif_popup: bool
+}
+
 #[derive(Resource, Default, Clone)]
 pub struct UIState {
     pub archive: ArchiveState,
     pub inspector: InspectorState,
+    pub top_panel: TopPanelState,
     pub view: ViewState,
 }
 

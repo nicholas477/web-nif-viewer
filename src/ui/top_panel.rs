@@ -2,44 +2,60 @@ use crate::ui::{UiSystemParams, file};
 use bevy::prelude::*;
 use bevy_egui::egui::{self, InnerResponse, Ui};
 
-pub fn top_panel(
-    viewport_ui: &mut Ui,
-    params: &mut UiSystemParams,
-) -> InnerResponse<()> {
+pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResponse<()> {
     egui::Panel::top("top_panel")
         .resizable(false)
         .show(viewport_ui, |ui| {
             ui.horizontal(|ui| {
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("Load URL").clicked() {
-                    file::open_archive_picker(&mut params.state, &mut params.fsstate);
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("Open File").clicked() {
-                    file::open_archive_picker(&mut params.state, &mut params.fsstate);
-                }
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("Upload File").clicked() {
-                    file::open_upload_picker(&mut params.state);
-                }
-                file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
-                draw_view_controls(
-                    ui,
-                    params,
-                );
+                ui.menu_button("File", |ui| {
+                    #[cfg(target_arch = "wasm32")]
+                    if ui.button("Load URL").clicked() {
+                        file::open_archive_picker(&mut params.state, &mut params.fsstate);
+                        ui.close();
+                    }
+
+                    #[cfg(target_arch = "wasm32")]
+                    if ui.button("Open NIF").clicked() {
+                        params.state.top_panel.show_nif_popup = true;
+                        ui.close();
+                    }
+
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button("Open File").clicked() {
+                        file::open_archive_picker(&mut params.state, &mut params.fsstate);
+                        ui.close();
+                    }
+
+                    file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
+                });
+
+                // #[cfg(target_arch = "wasm32")]
+                // if ui.button("Load URL").clicked() {
+                //     file::open_archive_picker(&mut params.state, &mut params.fsstate);
+                // }
+                // #[cfg(not(target_arch = "wasm32"))]
+                // if ui.button("Open File").clicked() {
+                //     file::open_archive_picker(&mut params.state, &mut params.fsstate);
+                // }
+                // #[cfg(target_arch = "wasm32")]
+                // if ui.button("Upload File").clicked() {
+                //     file::open_upload_picker(&mut params.state);
+                // }
+                // file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
+                draw_view_controls(ui, params);
             });
         })
 }
 
 /// Draws composable rendering controls and applies changed options to loaded entities.
-fn draw_view_controls(
-    ui: &mut Ui,
-    params: &mut UiSystemParams,
-) {
+fn draw_view_controls(ui: &mut Ui, params: &mut UiSystemParams) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let previous_options = crate::ViewOptions::from(&*params.state);
 
-        ui.label(format!("{} triangles", params.state.inspector.triangle_count));
+        ui.label(format!(
+            "{} triangles",
+            params.state.inspector.triangle_count
+        ));
         ui.checkbox(&mut params.state.view.wireframe, "Wireframe");
         egui::ComboBox::from_label("Collision")
             .selected_text(params.state.view.collision.label())
@@ -56,7 +72,11 @@ fn draw_view_controls(
                     .selected_text(params.state.view.vertex_colors.label())
                     .show_ui(ui, |ui| {
                         for mode in crate::DisplayMode::ALL {
-                            ui.selectable_value(&mut params.state.view.vertex_colors, mode, mode.label());
+                            ui.selectable_value(
+                                &mut params.state.view.vertex_colors,
+                                mode,
+                                mode.label(),
+                            );
                         }
                     });
             },
@@ -82,7 +102,8 @@ fn draw_view_controls(
             #[cfg(target_arch = "wasm32")]
             crate::state::query::update_query(&crate::state::query::QueryState {
                 zip_url: params.state.archive.zip_url_input.clone(),
-                selected_file: params.state
+                selected_file: params
+                    .state
                     .archive
                     .selected_file
                     .as_deref()
