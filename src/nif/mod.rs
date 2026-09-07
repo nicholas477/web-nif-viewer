@@ -11,7 +11,7 @@ pub use mesh::*;
 pub fn apply_view_options(
     view_options: crate::ViewOptions,
     materials: &mut Assets<crate::PhongMaterial>,
-    loaded_meshes: &mut Query<
+    loaded_materials: &mut Query<
         (
             &mut Mesh3d,
             &MeshMaterial3d<crate::PhongMaterial>,
@@ -22,7 +22,7 @@ pub fn apply_view_options(
     >,
     wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
 ) {
-    for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_meshes.iter_mut() {
+    for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_materials.iter_mut() {
         mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
         *visibility = visibility_for(view_options.collision, loaded_mesh.is_collision);
         if let Some(mut material) = materials.get_mut(&material_handle.0) {

@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_arguments)]
-
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
@@ -77,6 +75,7 @@ fn setup_system(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlo
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
     ));
 
+    // Gonna add these later. Right now the shader doesn't support lighting properly.
     // commands.spawn((
     //     DirectionalLight {
     //         illuminance: 10_000.0,

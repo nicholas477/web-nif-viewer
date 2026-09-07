@@ -4,7 +4,8 @@ use bevy::image::{
 };
 use std::collections::{HashMap, HashSet};
 use tes3::nif::{
-    NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode, Visitor,
+    NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode,
+    Visitor,
 };
 
 use crate::nif::*;
@@ -25,38 +26,68 @@ pub struct LoadedNifWireframe {
     pub nif_node_index: usize,
 }
 
+pub struct NifMeshLoadParams<'a, 'w, 's> {
+    pub file_name: String,
+    pub fsstate: &'a crate::state::FSState,
+    pub nif_objects: &'a mut Vec<crate::NifObjectInfo>,
+    pub nif_roots: &'a mut Vec<usize>,
+    pub nif_selected_node: &'a mut Option<usize>,
+    pub triangle_count: &'a mut usize,
+    pub view_options: crate::ViewOptions,
+    pub commands: &'a mut Commands<'w, 's>,
+    pub meshes: &'a mut Assets<Mesh>,
+    pub images: &'a mut Assets<Image>,
+    pub materials: &'a mut Assets<crate::PhongMaterial>,
+    pub loaded_meshes: &'a Query<'w, 's, Entity, With<LoadedNifMesh>>,
+    pub loaded_wireframes: &'a Query<'w, 's, Entity, With<LoadedNifWireframe>>,
+}
+
+impl<'a, 'w, 's> NifMeshLoadParams<'a, 'w, 's> {
+    /// Collects the NIF loader inputs from the UI system state.
+    pub fn from_ui_state(
+        file_name: impl Into<String>,
+        ui_state: &'a mut crate::ui::UiSystemParams<'w, 's>,
+    ) -> Self {
+        let view_options = crate::ViewOptions::from(&*ui_state.state);
+        let inspector = &mut ui_state.state.inspector;
+
+        Self {
+            file_name: file_name.into(),
+            fsstate: &ui_state.fsstate,
+            nif_objects: &mut inspector.nif_objects,
+            nif_roots: &mut inspector.nif_roots,
+            nif_selected_node: &mut inspector.selected_node,
+            triangle_count: &mut inspector.triangle_count,
+            view_options,
+            commands: &mut ui_state.commands,
+            meshes: &mut ui_state.meshes,
+            images: &mut ui_state.images,
+            materials: &mut ui_state.materials,
+            loaded_meshes: &ui_state.loaded_meshes,
+            loaded_wireframes: &ui_state.loaded_wireframe_entities,
+        }
+    }
+}
+
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
 pub fn load_nif(
-    file_name: &str,
-    file_system: &dyn crate::state::file::Filesystem,
-    nif_objects: &mut Vec<crate::NifObjectInfo>,
-    nif_roots: &mut Vec<usize>,
-    nif_selected_node: &mut Option<usize>,
-    triangle_count: &mut usize,
-    view_options: crate::ViewOptions,
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<crate::PhongMaterial>,
-    loaded_meshes: &Query<Entity, With<LoadedNifMesh>>,
-    loaded_wireframes: &Query<Entity, With<LoadedNifWireframe>>,
+    params: NifMeshLoadParams
 ) -> Result<(), String> {
-    bevy::log::info!("Loading NIF file: {file_name}");
+    bevy::log::info!("Loading NIF file: {}", params.file_name);
 
-    let file_bytes = {
-        file_system.read(file_name).map(|b| b.to_vec())
-    };
+    let file_system = params.fsstate.file_system.read().unwrap();
+    let file_bytes = file_system.read(&params.file_name).map(|b| b.to_vec());
 
     let Some(file_bytes) = file_bytes else {
-        return Err(format!("Selected file is no longer available: {file_name}"));
+        return Err(format!("Selected file is no longer available: {}", params.file_name));
     };
 
-    if !file_name.to_ascii_lowercase().ends_with(".nif") {
-        return Err(format!("The selected file is not a NIF: {file_name}"));
+    if !params.file_name.to_ascii_lowercase().ends_with(".nif") {
+        return Err(format!("The selected file is not a NIF: {}", params.file_name));
     }
 
     let Ok(stream) = NiStream::from_bytes(&file_bytes) else {
-        return Err(format!("Could not parse the NIF file: {file_name}"));
+        return Err(format!("Could not parse the NIF file: {}", params.file_name));
     };
 
     let object_indices = stream
@@ -65,7 +96,7 @@ pub fn load_nif(
         .enumerate()
         .map(|(index, key)| (key, index))
         .collect::<HashMap<_, _>>();
-    *nif_objects = stream
+    *params.nif_objects = stream
         .objects
         .iter()
         .map(|(_, object)| crate::NifObjectInfo {
@@ -84,12 +115,12 @@ pub fn load_nif(
         })
         .collect();
 
-    *nif_roots = stream
+    *params.nif_roots = stream
         .roots
         .iter()
         .filter_map(|root| object_indices.get(&root.key).copied())
         .collect();
-    *nif_selected_node = None;
+    *params.nif_selected_node = None;
 
     let collision_shapes = stream
         .objects_of_type::<RootCollisionNode>()
@@ -101,13 +132,13 @@ pub fn load_nif(
         )
         .map(|link| link.key)
         .collect::<HashSet<_>>();
-    *triangle_count = 0;
+    *params.triangle_count = 0;
 
-    for entity in loaded_meshes.iter() {
-        commands.entity(entity).despawn();
+    for entity in params.loaded_meshes.iter() {
+        params.commands.entity(entity).despawn();
     }
-    for entity in loaded_wireframes.iter() {
-        commands.entity(entity).despawn();
+    for entity in params.loaded_wireframes.iter() {
+        params.commands.entity(entity).despawn();
     }
 
     let mut shape_count = 0;
@@ -122,7 +153,7 @@ pub fn load_nif(
         if data.base.base.vertices.is_empty() || data.triangles.is_empty() {
             continue;
         }
-        *triangle_count += data.triangles.len();
+        *params.triangle_count += data.triangles.len();
 
         let positions = data
             .base
@@ -233,7 +264,7 @@ pub fn load_nif(
 
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
             if let Some(texture_bytes) =
-                crate::state::file::find_file(file_system, file_name, &texture_path)
+                crate::state::file::find_file(file_system.as_ref(), &params.file_name, &texture_path)
             {
                 let extension = texture_path
                     .rsplit('.')
@@ -260,13 +291,13 @@ pub fn load_nif(
                     bevy::asset::RenderAssetUsages::default(),
                 ) {
                     Ok(image) => {
-                        let texture = images.add(image);
+                        let texture = params.images.add(image);
                         material.color_texture = Some(texture.clone());
                         diffuse_texture = Some(texture);
                     }
                     Err(error) => {
                         bevy::log::warn!(
-                            "Could not decode texture {texture_path} for {file_name}: {error}"
+                            "Could not decode texture {texture_path} for {}: {error}", params.file_name
                         );
                     }
                 }
@@ -277,7 +308,7 @@ pub fn load_nif(
 
         let mut uncolored_mesh = mesh.clone();
         uncolored_mesh.remove_attribute(Mesh::ATTRIBUTE_COLOR);
-        let uncolored_mesh = meshes.add(uncolored_mesh);
+        let uncolored_mesh = params.meshes.add(uncolored_mesh);
         let mut vertex_color_mesh = mesh.clone();
         if !has_vertex_colors {
             vertex_color_mesh.insert_attribute(
@@ -285,7 +316,7 @@ pub fn load_nif(
                 vec![[1.0, 1.0, 1.0, 1.0]; vertex_color_mesh.count_vertices()],
             );
         }
-        let vertex_color_mesh = meshes.add(vertex_color_mesh);
+        let vertex_color_mesh = params.meshes.add(vertex_color_mesh);
         let mut normal_mesh = mesh;
         let normal_colors = normals
             .iter()
@@ -306,7 +337,7 @@ pub fn load_nif(
                 vec![[0.5, 0.5, 1.0, 1.0]; normal_mesh.count_vertices()],
             );
         }
-        let normal_mesh = meshes.add(normal_mesh);
+        let normal_mesh = params.meshes.add(normal_mesh);
         let loaded_mesh = LoadedNifMesh {
             uncolored_mesh,
             vertex_color_mesh,
@@ -316,17 +347,17 @@ pub fn load_nif(
             nif_node_index: Some(nif_node_index),
         };
         let is_collision = loaded_mesh.is_collision;
-        apply_material_options(&mut material, view_options, &loaded_mesh);
-        let base_visibility = visibility_for(view_options.collision, is_collision);
+        apply_material_options(&mut material, params.view_options, &loaded_mesh);
+        let base_visibility = visibility_for(params.view_options.collision, is_collision);
         let wireframe_transform = Transform {
             scale: transform.scale * 1.0001,
             ..transform
         };
 
         // Mesh spawned here
-        commands.spawn((
-            Mesh3d(mesh_handle_for_options(view_options, &loaded_mesh)),
-            MeshMaterial3d(materials.add(material)),
+        params.commands.spawn((
+            Mesh3d(mesh_handle_for_options(params.view_options, &loaded_mesh)),
+            MeshMaterial3d(params.materials.add(material)),
             transform,
             base_visibility,
             loaded_mesh,
@@ -362,9 +393,9 @@ pub fn load_nif(
                 .collect(),
         ));
 
-        commands.spawn((
-            Mesh3d(meshes.add(wireframe_mesh)),
-            MeshMaterial3d(materials.add(crate::PhongMaterial {
+        params.commands.spawn((
+            Mesh3d(params.meshes.add(wireframe_mesh)),
+            MeshMaterial3d(params.materials.add(crate::PhongMaterial {
                 color: LinearRgba::BLACK,
                 color_texture: None,
                 settings: Vec4::new(0.0, 0.0, 1.0, 0.0),
@@ -372,7 +403,7 @@ pub fn load_nif(
                 cull_mode: Some(wgpu_types::Face::Back),
             })),
             wireframe_transform,
-            if view_options.wireframe {
+            if params.view_options.wireframe {
                 base_visibility
             } else {
                 Visibility::Hidden
@@ -387,9 +418,9 @@ pub fn load_nif(
     }
 
     if shape_count == 0 {
-        return Err(format!("No renderable meshes were found in: {file_name}"));
+        return Err(format!("No renderable meshes were found in: {}", params.file_name));
     }
 
-    bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {file_name}");
+    bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {}", params.file_name);
     Ok(())
 }

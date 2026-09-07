@@ -94,11 +94,7 @@ pub fn ui_system(
     // Top panel
     let top = top_panel::top_panel(
         &mut viewport_ui,
-        &mut params.state,
-        &mut params.fsstate,
-        params.materials,
-        params.loaded_materials,
-        params.loaded_wireframes,
+        &mut params,
     )
     .response
     .rect
@@ -152,27 +148,10 @@ fn load_nif(
     file_name: &str,
     params: &mut UiSystemParams,
 ) {
-    let (_, projection, pan_orbit) = &mut *params.camera3d;
-
-    let view_options = crate::ViewOptions::from(&*params.state);
-    let inspector = &mut params.state.inspector;
-    match crate::nif::load_nif(
-        file_name,
-        params.fsstate.file_system.read().unwrap().as_ref() as &dyn crate::state::file::Filesystem,
-        &mut inspector.nif_objects,
-        &mut inspector.nif_roots,
-        &mut inspector.selected_node,
-        &mut inspector.triangle_count,
-        view_options,
-        &mut params.commands,
-        &mut params.meshes,
-        &mut params.images,
-        &mut params.materials,
-        &params.loaded_meshes,
-        &params.loaded_wireframe_entities,
-    ) {
+    match crate::nif::load_nif(crate::nif::NifMeshLoadParams::from_ui_state(file_name, params)) {
         Ok(()) => {
             crate::state::recent_files::record_recent_file(&params.state.archive.zip_url_input, file_name);
+            let (_, projection, pan_orbit) = &mut *params.camera3d;
             crate::camera::focus_loaded_meshes(&params.meshes, projection, &params.window, pan_orbit);
         }
         Err(error) => params.state.archive.nif_load_error = Some(error),
