@@ -47,8 +47,8 @@ fn main() {
         .add_systems(Startup, setup_system)
         .init_resource::<UIState>()
         .init_resource::<FSState>()
-        .add_observer(nif::picking::select_mesh)
-        .add_systems(Update, nif::picking::clear_selection_on_viewport_click)
+        .add_observer(ui::picking::select_mesh)
+        .add_systems(Update, ui::picking::clear_selection_on_viewport_click)
         .add_systems(EguiPrimaryContextPass, ui::ui_system)
         .add_systems(Update, input::input_system);
 

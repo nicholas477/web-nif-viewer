@@ -3,7 +3,6 @@ use tes3::nif::{
     AlphaTestFunction, NiStream, NiTexturingProperty, NiTriShape, TextureMap, TextureSource,
 };
 
-pub mod picking;
 pub mod mesh;
 pub use mesh::*;
 
@@ -20,7 +19,14 @@ pub fn apply_view_options(
         ),
         Without<LoadedNifWireframe>,
     >,
-    wireframes: &mut Query<(&mut Visibility, &LoadedNifWireframe), Without<LoadedNifMesh>>,
+    wireframes: &mut Query<
+        (
+            &'static crate::nif::LoadedNifWireframe,
+            &'static MeshMaterial3d<crate::PhongMaterial>,
+            &'static mut Visibility,
+        ),
+        Without<LoadedNifMesh>,
+    >,
 ) {
     for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_materials.iter_mut() {
         mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
@@ -30,7 +36,7 @@ pub fn apply_view_options(
         }
     }
 
-    for (mut visibility, wireframe) in wireframes.iter_mut() {
+    for (wireframe, _, mut visibility) in wireframes.iter_mut() {
         *visibility = if view_options.wireframe {
             visibility_for(view_options.collision, wireframe.is_collision)
         } else {

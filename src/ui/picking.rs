@@ -2,8 +2,9 @@ use bevy::{
     input::{ButtonState, mouse::MouseButtonInput},
     picking::events::Click,
     prelude::*,
-    window::PrimaryWindow,
 };
+
+use crate::ui::UiSystemParams;
 
 /// Selects the clicked NIF shape in the inspector and highlights its wireframe.
 pub fn select_mesh(
@@ -35,32 +36,20 @@ pub fn select_mesh(
 pub fn clear_selection_on_viewport_click(
     mut mouse_buttons: MessageReader<MouseButtonInput>,
     mut pointer_clicks: MessageReader<Pointer<Click>>,
-    window: Single<&Window, With<PrimaryWindow>>,
-    camera: Single<&Camera, (With<Camera3d>, Without<bevy_egui::EguiContext>)>,
-    meshes: Query<&crate::nif::LoadedNifMesh>,
-    mut wireframes: Query<
-        (
-            &crate::nif::LoadedNifWireframe,
-            &MeshMaterial3d<crate::PhongMaterial>,
-            &mut Visibility,
-        ),
-        Without<crate::nif::LoadedNifMesh>,
-    >,
-    mut materials: ResMut<Assets<crate::PhongMaterial>>,
-    state: ResMut<crate::state::UIState>,
+    mut params: UiSystemParams,
 ) {
     if !mouse_buttons.read().any(|event| {
         event.button == MouseButton::Left && event.state == ButtonState::Pressed
     }) {
         return;
     }
-    let Some(cursor_position) = window.cursor_position() else {
+    let Some(cursor_position) = params.window.cursor_position() else {
         return;
     };
-    let Some(viewport) = camera.viewport.as_ref() else {
+    let Some(viewport) = params.camera.viewport.as_ref() else {
         return;
     };
-    let scale_factor = window.scale_factor();
+    let scale_factor = params.window.scale_factor();
     let viewport_min = viewport.physical_position.as_vec2() / scale_factor;
     let viewport_max = viewport_min + viewport.physical_size.as_vec2() / scale_factor;
     if cursor_position.cmplt(viewport_min).any() || cursor_position.cmpgt(viewport_max).any() {
@@ -69,12 +58,12 @@ pub fn clear_selection_on_viewport_click(
 
     let clicked_mesh = pointer_clicks
         .read()
-        .any(|event| meshes.contains(event.entity));
+        .any(|event| params.loaded_meshes.contains(event.entity));
     if clicked_mesh {
         return;
     }
     //state.inspector.selected_node = None;
-    set_wireframe_highlight(&mut wireframes, &mut materials, &state, None);
+    set_wireframe_highlight(&mut params.loaded_wireframes, &mut params.materials, &params.state, None);
 }
 
 fn set_wireframe_highlight(

@@ -1,5 +1,6 @@
 mod file;
 mod inspector;
+pub mod picking;
 mod top_panel;
 
 use bevy::{camera::Viewport, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
@@ -15,33 +16,47 @@ pub struct UiSystemParams<'w, 's> {
     pub fsstate: ResMut<'w, crate::state::FSState>,
     pub commands: Commands<'w, 's>,
     pub camera: Single<'w, 's, &'static mut Camera, Without<EguiContext>>,
-    pub camera3d: Single<'w, 's, (
-        &'static mut Camera3d,
-        &'static Projection,
-        &'static mut crate::camera::PanOrbitCamera,
-    ), Without<EguiContext>>,
+    pub camera3d: Single<
+        'w,
+        's,
+        (
+            &'static mut Camera3d,
+            &'static Projection,
+            &'static mut crate::camera::PanOrbitCamera,
+        ),
+        Without<EguiContext>,
+    >,
     pub window: Single<'w, 's, &'static mut Window, With<PrimaryWindow>>,
     pub meshes: ResMut<'w, Assets<Mesh>>,
     pub images: ResMut<'w, Assets<Image>>,
     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
     pub loaded_meshes: Query<'w, 's, Entity, With<crate::nif::LoadedNifMesh>>,
-    pub loaded_materials: Query<'w, 's, (
-        &'static mut Mesh3d,
-        &'static MeshMaterial3d<crate::PhongMaterial>,
-        &'static mut Visibility,
-        &'static crate::nif::LoadedNifMesh,
-    ), Without<crate::nif::LoadedNifWireframe>>,
-    pub loaded_wireframes: Query<'w, 's, (
-        &'static mut Visibility,
-        &'static crate::nif::LoadedNifWireframe,
-    ), Without<crate::nif::LoadedNifMesh>>,
+    pub loaded_materials: Query<
+        'w,
+        's,
+        (
+            &'static mut Mesh3d,
+            &'static MeshMaterial3d<crate::PhongMaterial>,
+            &'static mut Visibility,
+            &'static crate::nif::LoadedNifMesh,
+        ),
+        Without<crate::nif::LoadedNifWireframe>,
+    >,
+    pub loaded_wireframes: Query<
+        'w,
+        's,
+        (
+            &'static crate::nif::LoadedNifWireframe,
+            &'static MeshMaterial3d<crate::PhongMaterial>,
+            &'static mut Visibility,
+        ),
+        Without<crate::nif::LoadedNifMesh>,
+    >,
     pub loaded_wireframe_entities: Query<'w, 's, Entity, With<crate::nif::LoadedNifWireframe>>,
 }
 
 /// Draws the viewer UI, processes file selection, and updates the 3D viewport bounds.
-pub fn ui_system(
-    mut params: UiSystemParams,
-) -> Result {
+pub fn ui_system(mut params: UiSystemParams) -> Result {
     let ctx = params.contexts.ctx_mut()?.clone();
     let mut viewport_ui = Ui::new(
         ctx.clone(),
@@ -54,7 +69,8 @@ pub fn ui_system(
 
     #[cfg(target_arch = "wasm32")]
     let uploaded_download_url = {
-        params.state
+        params
+            .state
             .archive
             .upload_status
             .write()
@@ -92,13 +108,10 @@ pub fn ui_system(
     }
 
     // Top panel
-    let top = top_panel::top_panel(
-        &mut viewport_ui,
-        &mut params,
-    )
-    .response
-    .rect
-    .height();
+    let top = top_panel::top_panel(&mut viewport_ui, &mut params)
+        .response
+        .rect
+        .height();
 
     left *= params.window.scale_factor();
     let top = top * params.window.scale_factor();
@@ -125,10 +138,7 @@ pub fn ui_system(
 }
 
 /// Loads a requested NIF once its containing archive has made the file available.
-fn load_pending_nif(
-    file_names: &[String],
-    params: &mut UiSystemParams,
-) {
+fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
     let Some(file_name) = params.state.archive.pending_file.clone() else {
         return;
     };
@@ -137,22 +147,26 @@ fn load_pending_nif(
     }
     params.state.archive.pending_file = None;
     params.state.archive.selected_file = Some(file_name.clone());
-    load_nif(
-        &file_name,
-        params,
-    );
+    load_nif(&file_name, params);
 }
 
 /// Loads a NIF into Bevy assets, records failures, and frames the camera on success.
-fn load_nif(
-    file_name: &str,
-    params: &mut UiSystemParams,
-) {
-    match crate::nif::load_nif(crate::nif::NifMeshLoadParams::from_ui_state(file_name, params)) {
+fn load_nif(file_name: &str, params: &mut UiSystemParams) {
+    match crate::nif::load_nif(crate::nif::NifMeshLoadParams::from_ui_state(
+        file_name, params,
+    )) {
         Ok(()) => {
-            crate::state::recent_files::record_recent_file(&params.state.archive.zip_url_input, file_name);
+            crate::state::recent_files::record_recent_file(
+                &params.state.archive.zip_url_input,
+                file_name,
+            );
             let (_, projection, pan_orbit) = &mut *params.camera3d;
-            crate::camera::focus_loaded_meshes(&params.meshes, projection, &params.window, pan_orbit);
+            crate::camera::focus_loaded_meshes(
+                &params.meshes,
+                projection,
+                &params.window,
+                pan_orbit,
+            );
         }
         Err(error) => params.state.archive.nif_load_error = Some(error),
     }
