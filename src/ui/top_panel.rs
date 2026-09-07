@@ -20,7 +20,7 @@ pub fn top_panel(
                 }
                 #[cfg(target_arch = "wasm32")]
                 if ui.button("Upload File").clicked() {
-                    file::open_upload_picker(state);
+                    file::open_upload_picker(&mut params.state);
                 }
                 file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
                 draw_view_controls(
@@ -81,14 +81,14 @@ fn draw_view_controls(
 
             #[cfg(target_arch = "wasm32")]
             crate::state::query::update_query(&crate::state::query::QueryState {
-                zip_url: state.archive.zip_url_input.clone(),
-                selected_file: state
+                zip_url: params.state.archive.zip_url_input.clone(),
+                selected_file: params.state
                     .archive
                     .selected_file
                     .as_deref()
                     .map(|s| s.into())
                     .unwrap_or_default(),
-                view_state: state.view.clone(),
+                view_state: params.state.view.clone(),
             });
         }
     });
