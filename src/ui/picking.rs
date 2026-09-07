@@ -9,27 +9,17 @@ use crate::ui::UiSystemParams;
 /// Selects the clicked NIF shape in the inspector and highlights its wireframe.
 pub fn select_mesh(
     event: On<Pointer<Click>>,
-    meshes: Query<&crate::nif::LoadedNifMesh>,
-    mut wireframes: Query<
-        (
-            &crate::nif::LoadedNifWireframe,
-            &MeshMaterial3d<crate::PhongMaterial>,
-            &mut Visibility,
-        ),
-        Without<crate::nif::LoadedNifMesh>,
-    >,
-    mut materials: ResMut<Assets<crate::PhongMaterial>>,
-    mut state: ResMut<crate::state::UIState>,
+    mut params: UiSystemParams,
 ) {
-    let Ok(mesh) = meshes.get(event.entity) else {
+    let Ok((_, mesh)) = params.loaded_meshes.get(event.entity) else {
         return;
     };
     let Some(selected_node) = mesh.nif_node_index else {
         return;
     };
 
-    state.inspector.selected_node = Some(selected_node);
-    set_wireframe_highlight(&mut wireframes, &mut materials, &state, Some(selected_node));
+    params.state.inspector.selected_node = Some(selected_node);
+    set_wireframe_highlight(Some(selected_node), &mut params);
 }
 
 /// Clears the mesh selection after a left click that misses every mesh in the 3D viewport.
@@ -62,25 +52,15 @@ pub fn clear_selection_on_viewport_click(
     if clicked_mesh {
         return;
     }
-    //state.inspector.selected_node = None;
-    set_wireframe_highlight(&mut params.loaded_wireframes, &mut params.materials, &params.state, None);
+    set_wireframe_highlight(None, &mut params);
 }
 
 fn set_wireframe_highlight(
-    wireframes: &mut Query<
-        (
-            &crate::nif::LoadedNifWireframe,
-            &MeshMaterial3d<crate::PhongMaterial>,
-            &mut Visibility,
-        ),
-        Without<crate::nif::LoadedNifMesh>,
-    >,
-    materials: &mut Assets<crate::PhongMaterial>,
-    state: &crate::state::UIState,
     selected_node: Option<usize>,
+    params: &mut UiSystemParams,
 ) {
-    for (wireframe, material_handle, mut visibility) in wireframes.iter_mut() {
-        if let Some(mut material) = materials.get_mut(&material_handle.0) {
+    for (wireframe, material_handle, mut visibility) in params.loaded_wireframes.iter_mut() {
+        if let Some(mut material) = params.materials.get_mut(&material_handle.0) {
             material.color = if Some(wireframe.nif_node_index) == selected_node {
                 LinearRgba::new(0.0, 1.0, 0.0, 1.0)
             } else {
@@ -91,7 +71,7 @@ fn set_wireframe_highlight(
             *visibility = bevy::camera::visibility::Visibility::Visible;
         }
         else {
-            *visibility = if state.view.wireframe {
+            *visibility = if params.state.view.wireframe {
                 bevy::camera::visibility::Visibility::Visible
             } else {
                 bevy::camera::visibility::Visibility::Hidden

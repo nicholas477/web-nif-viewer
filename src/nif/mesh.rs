@@ -38,7 +38,7 @@ pub struct NifMeshLoadParams<'a, 'w, 's> {
     pub meshes: &'a mut Assets<Mesh>,
     pub images: &'a mut Assets<Image>,
     pub materials: &'a mut Assets<crate::PhongMaterial>,
-    pub loaded_meshes: &'a Query<'w, 's, Entity, With<LoadedNifMesh>>,
+    pub loaded_meshes: &'a Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
     pub loaded_wireframes: &'a Query<'w, 's, Entity, With<LoadedNifWireframe>>,
 }
 
@@ -134,7 +134,7 @@ pub fn load_nif(
         .collect::<HashSet<_>>();
     *params.triangle_count = 0;
 
-    for entity in params.loaded_meshes.iter() {
+    for (entity, _) in params.loaded_meshes.iter() {
         params.commands.entity(entity).despawn();
     }
     for entity in params.loaded_wireframes.iter() {

@@ -9,6 +9,9 @@ use egui::{LayerId, Ui, UiBuilder};
 
 pub use file::initialize_default_mesh;
 
+use crate::nif::LoadedNifMesh;
+
+/// System parameter struct of doom and despair
 #[derive(SystemParam)]
 pub struct UiSystemParams<'w, 's> {
     pub contexts: EguiContexts<'w, 's>,
@@ -30,7 +33,7 @@ pub struct UiSystemParams<'w, 's> {
     pub meshes: ResMut<'w, Assets<Mesh>>,
     pub images: ResMut<'w, Assets<Image>>,
     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
-    pub loaded_meshes: Query<'w, 's, Entity, With<crate::nif::LoadedNifMesh>>,
+    pub loaded_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
     pub loaded_materials: Query<
         'w,
         's,
