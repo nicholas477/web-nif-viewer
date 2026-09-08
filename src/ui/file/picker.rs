@@ -5,6 +5,7 @@ pub type ReadResult = Pin<Box<dyn Future<Output = Option<Vec<u8>>>>>;
 pub trait PickerFile: std::fmt::Debug {
     fn name(&self) -> String;
     fn read(&self) -> ReadResult;
+    fn mime_type(&self) -> String;
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -35,6 +36,10 @@ mod web {
                     Err(_) => None,
                 }
             })
+        }
+
+        fn mime_type(&self) -> String {
+            self.type_()
         }
     }
 

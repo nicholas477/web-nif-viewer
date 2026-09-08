@@ -31,6 +31,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                                 file::pick_single_file(".nif,.zip,application/zip").await
                             {
                                 bevy::log::info!("Selected file: {:#?}", file);
+                                bevy::log::info!("Selected file mime type: {}", file.mime_type());
                                 load_file(file);
                             }
                         });
