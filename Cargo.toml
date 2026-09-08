@@ -112,6 +112,7 @@ web-sys = { version = "0.3", features = [
     "Response",
     "Request",
     "RequestInit",
+    "Storage",
     "Url",
     "UrlSearchParams",
     "Window",

@@ -76,6 +76,8 @@ export function move_resource_directory(index, destination) {
   saveResourceDirectories().catch(() => {});
     resourceFilesystemUpdated = true;
 }
+export function load_key_bindings() { return localStorage.getItem('keyBindings'); }
+export function save_key_bindings(bindings) { localStorage.setItem('keyBindings', bindings); }
 ")]
 extern "C" {
     async fn load_resource_directories();
@@ -86,12 +88,20 @@ extern "C" {
     fn pick_resource_directory();
     fn remove_resource_directory(index: u32);
     fn move_resource_directory(index: u32, destination: u32);
+    fn load_key_bindings() -> Option<String>;
+    fn save_key_bindings(bindings: &str);
 }
 
 pub fn initialize_resources(
-    _state: bevy::prelude::ResMut<crate::UIState>,
+    mut state: bevy::prelude::ResMut<crate::UIState>,
     _fsstate: bevy::prelude::ResMut<crate::state::FSState>,
 ) {
+    if let Some(bindings) = load_key_bindings()
+        .and_then(|bindings| serde_json::from_str(&bindings).ok())
+        .and_then(crate::KeyBindings::from_config)
+    {
+        state.key_bindings = bindings;
+    }
     RESOURCE_PERMISSIONS_READY.store(false, Ordering::Release);
     wasm_bindgen_futures::spawn_local(async {
         load_resource_directories().await;
@@ -103,6 +113,18 @@ pub fn initialize_resources(
             "Restored resource folders from IndexedDB; permission may require user action"
         );
     });
+}
+
+pub fn save_keybindings(bindings: &crate::KeyBindings) {
+    let Some(bindings) = bindings.to_config() else {
+        bevy::log::warn!("Could not save unsupported keyboard binding.");
+        return;
+    };
+    let Ok(bindings) = serde_json::to_string(&bindings) else {
+        bevy::log::warn!("Could not serialize key bindings.");
+        return;
+    };
+    save_key_bindings(&bindings);
 }
 
 /// Starts the default archive only after persisted resource permissions are resolved.

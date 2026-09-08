@@ -151,6 +151,10 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                 });
 
                 ui.menu_button("Settings", |ui| {
+                    if ui.button("Key Bindings").clicked() {
+                        params.state.top_panel.show_keybindings = true;
+                        ui.close();
+                    }
                     if ui.button("Resources").clicked() {
                         params.state.top_panel.show_resources = true;
                         ui.close();

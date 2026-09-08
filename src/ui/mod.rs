@@ -25,6 +25,8 @@ pub struct UiSystemParams<'w, 's> {
     pub contexts: EguiContexts<'w, 's>,
     pub state: ResMut<'w, crate::state::UIState>,
     pub fsstate: ResMut<'w, crate::state::FSState>,
+    pub keys: Res<'w, ButtonInput<KeyCode>>,
+    pub mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
     pub commands: Commands<'w, 's>,
     pub camera: Single<'w, 's, &'static mut Camera, Without<EguiContext>>,
     pub camera3d: Single<
@@ -229,6 +231,17 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
     });
 
     settings::draw_resources(&ctx, &mut params);
+    let (_, _, pan_orbit) = &mut *params.camera3d;
+    pan_orbit.button_orbit = params.state.key_bindings.orbit;
+    pan_orbit.button_pan = params.state.key_bindings.pan;
+    pan_orbit.button_zoom = params.state.key_bindings.zoom;
+    settings::draw_keybindings(
+        &ctx,
+        &mut params.state,
+        &params.keys,
+        &params.mouse_buttons,
+        pan_orbit,
+    );
 
     #[cfg(target_arch = "wasm32")]
     file::draw_url_dialog(&ctx, &mut params.state, &mut params.fsstate);

@@ -7,6 +7,8 @@ use rfd::FileDialog;
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 struct ResourceConfig {
     resource_paths: Vec<String>,
+    #[serde(default)]
+    key_bindings: Option<crate::KeyBindingsConfig>,
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -18,25 +20,45 @@ pub fn initialize_resources(
     mut state: bevy::prelude::ResMut<crate::UIState>,
     mut fsstate: bevy::prelude::ResMut<crate::state::FSState>,
 ) {
-    let paths = config_path()
-        .and_then(|path| fs::read_to_string(path).ok())
-        .and_then(|contents| toml::from_str::<ResourceConfig>(&contents).ok())
-        .unwrap_or_default()
-        .resource_paths;
+    let config = load_config();
+    let paths = config.resource_paths;
+    if let Some(bindings) = config.key_bindings.and_then(crate::KeyBindings::from_config) {
+        state.key_bindings = bindings;
+    }
     state.top_panel.resource_paths = paths;
     rebuild_resources(&mut fsstate, &state.top_panel.resource_paths);
 }
 
 fn save_resources(paths: &[String]) {
-    let Some(path) = config_path() else {
-        bevy::log::warn!("Could not determine the configuration directory for resource folders.");
+    let mut config = load_config();
+    config.resource_paths = paths.to_vec();
+    save_config(&config);
+}
+
+pub fn save_keybindings(bindings: &crate::KeyBindings) {
+    let Some(bindings) = bindings.to_config() else {
+        bevy::log::warn!("Could not save unsupported keyboard binding.");
         return;
     };
-    let config = ResourceConfig {
-        resource_paths: paths.to_vec(),
+    let mut config = load_config();
+    config.key_bindings = Some(bindings);
+    save_config(&config);
+}
+
+fn load_config() -> ResourceConfig {
+    config_path()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .and_then(|contents| toml::from_str::<ResourceConfig>(&contents).ok())
+        .unwrap_or_default()
+}
+
+fn save_config(config: &ResourceConfig) {
+    let Some(path) = config_path() else {
+        bevy::log::warn!("Could not determine the configuration directory for settings.");
+        return;
     };
     let Ok(contents) = toml::to_string(&config) else {
-        bevy::log::warn!("Could not serialize resource folder settings.");
+        bevy::log::warn!("Could not serialize settings.");
         return;
     };
     if let Some(parent) = path.parent() {
