@@ -35,6 +35,52 @@ pub fn open_url_dialog(state: &mut crate::UIState, _fsstate: &mut crate::state::
     state.archive.show_zip_popup = true;
 }
 
+/// Draws the browser archive URL dialog and starts loading the submitted URL.
+pub fn draw_url_dialog(
+    ctx: &bevy_egui::egui::Context,
+    state: &mut crate::UIState,
+    fsstate: &mut crate::state::FSState,
+) {
+    if !state.archive.show_zip_popup {
+        return;
+    }
+
+    let mut open = state.archive.show_zip_popup;
+    let mut submitted_url = None;
+    let mut cancelled = false;
+    bevy_egui::egui::Window::new("Load URL")
+        .open(&mut open)
+        .resizable(false)
+        .collapsible(false)
+        .default_width(480.0)
+        .show(ctx, |ui| {
+            ui.text_edit_singleline(&mut state.archive.zip_url_input);
+            ui.horizontal(|ui| {
+                if ui.button("Load").clicked() {
+                    submitted_url = Some(state.archive.zip_url_input.trim().to_string());
+                }
+                if ui.button("Cancel").clicked() {
+                    cancelled = true;
+                }
+            });
+        });
+
+    if let Some(url) = submitted_url.filter(|url| !url.is_empty()) {
+        open = false;
+        start_archive_load(
+            state,
+            fsstate,
+            url,
+            None,
+            crate::RecentFileSource::Url,
+        );
+    }
+    if cancelled {
+        open = false;
+    }
+    state.archive.show_zip_popup = open;
+}
+
 /// Opens the browser's ZIP file picker and starts the upload after selection.
 pub fn open_upload_picker(state: &mut crate::UIState) {
     let status = state.archive.upload_status.clone();

@@ -229,6 +229,9 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
 
     settings::draw_resources(&ctx, &mut params);
 
+    #[cfg(target_arch = "wasm32")]
+    file::draw_url_dialog(&ctx, &mut params.state, &mut params.fsstate);
+
     file::draw_load_status(&ctx, &params.state);
     file::draw_upload_status(&ctx, &params.state);
     file::draw_error_popup(&ctx, &mut params.state);
