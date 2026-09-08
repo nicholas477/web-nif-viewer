@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::RwLock};
 
 use super::Filesystem;
 use arc_slice::ArcSlice;
@@ -23,8 +23,12 @@ mod tests;
 pub struct NullFS;
 
 impl Filesystem for NullFS {
-    fn read(&self, _path: &str, _absolute_path: bool) -> Option<ArcSlice<[u8]>> {
-        None
+    fn read<'a>(
+        &'a self,
+        _path: &'a str,
+        _absolute_path: bool,
+    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+        Box::pin(async { None })
     }
 
     fn absolute_paths(&self) -> Vec<String> {
@@ -37,11 +41,12 @@ impl Filesystem for NullFS {
 /// it would return: "mods/example"
 pub fn get_nif_base_dir(path: &str) -> &str {
     if let Some(idx) = path.to_lowercase().find("meshes") {
-        let end = if idx > 0 && (path.as_bytes()[idx - 1] == b'/' || path.as_bytes()[idx - 1] == b'\\') {
-            idx - 1
-        } else {
-            idx
-        };
+        let end =
+            if idx > 0 && (path.as_bytes()[idx - 1] == b'/' || path.as_bytes()[idx - 1] == b'\\') {
+                idx - 1
+            } else {
+                idx
+            };
         &path[..end]
     } else {
         path
@@ -86,22 +91,28 @@ impl Filesystem for HashmapFS {
         *self.base.write().unwrap() = base;
     }
 
-    fn read(&self, path: &str, absolute_path: bool) -> Option<ArcSlice<[u8]>> {
-        let base_is_empty = self.base.read().unwrap().is_empty();
+    fn read<'a>(
+        &'a self,
+        path: &'a str,
+        absolute_path: bool,
+    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+        Box::pin(async move {
+            let base_is_empty = self.base.read().unwrap().is_empty();
 
-        if absolute_path || base_is_empty {
-            if !absolute_path {
-                bevy::log::info!("HashmapFS: Base is empty, reading absolute file: {path}");
+            if absolute_path || base_is_empty {
+                if !absolute_path {
+                    bevy::log::info!("HashmapFS: Base is empty, reading absolute file: {path}");
+                } else {
+                    bevy::log::info!("HashmapFS: Reading absolute file: {path}");
+                }
+                self.inner.get(path).cloned()
             } else {
-                bevy::log::info!("HashmapFS: Reading absolute file: {path}");
+                let base = self.base.read().unwrap().clone();
+                let full_path = format!("{base}/{path}");
+                bevy::log::info!("HashmapFS: Reading relative file with base: {full_path}");
+                self.inner.get(&full_path).cloned()
             }
-            self.inner.get(path).cloned()
-        } else {
-            let base = self.base.read().unwrap().clone();
-            let full_path = format!("{base}/{path}");
-            bevy::log::info!("HashmapFS: Reading relative file with base: {full_path}");
-            self.inner.get(&full_path).cloned()
-        }
+        })
     }
 
     fn absolute_paths(&self) -> Vec<String> {
@@ -133,13 +144,19 @@ impl CombinedFS {
 }
 
 impl Filesystem for CombinedFS {
-    fn read(&self, path: &str, absolute_path: bool) -> Option<ArcSlice<[u8]>> {
-        for fs in self.inner.read().unwrap().iter() {
-            if let Some(data) = fs.read(path, absolute_path) {
-                return Some(data);
+    fn read<'a>(
+        &'a self,
+        path: &'a str,
+        absolute_path: bool,
+    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+        Box::pin(async move {
+            for fs in self.inner.read().unwrap().iter() {
+                if let Some(data) = fs.read(path, absolute_path).await {
+                    return Some(data);
+                }
             }
-        }
-        None
+            None
+        })
     }
 
     fn absolute_paths(&self) -> Vec<String> {

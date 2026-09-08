@@ -109,6 +109,7 @@ fn draw_view_controls(ui: &mut Ui, params: &mut UiSystemParams) {
             crate::nif::apply_view_options(
                 view_options,
                 &mut params.materials,
+                &params.pending_texture_loads,
                 &mut params.loaded_materials,
                 &mut params.loaded_wireframes,
             );

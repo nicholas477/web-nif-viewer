@@ -4,16 +4,20 @@ pub mod picking;
 mod settings;
 mod top_panel;
 
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 
 use bevy::{camera::Viewport, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use file::initialize_default_mesh;
 pub use settings::initialize_resources;
 
-use crate::{file::{Filesystem, get_nif_base_dir}, nif::LoadedNifMesh};
+#[cfg(target_arch = "wasm32")]
+pub use settings::initialize_default_mesh_after_resources;
+
+use crate::{file::Filesystem, nif::LoadedNifMesh};
 
 /// System parameter struct of doom and despair
 #[derive(SystemParam)]
@@ -37,6 +41,7 @@ pub struct UiSystemParams<'w, 's> {
     pub meshes: ResMut<'w, Assets<Mesh>>,
     pub images: ResMut<'w, Assets<Image>>,
     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
+    pub pending_texture_loads: ResMut<'w, crate::nif::PendingTextureLoads>,
     pub loaded_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
     pub loaded_materials: Query<
         'w,
@@ -64,6 +69,11 @@ pub struct UiSystemParams<'w, 's> {
 
 /// Draws the viewer UI, processes file selection, and updates the 3D viewport bounds.
 pub fn ui_system(mut params: UiSystemParams) -> Result {
+    crate::nif::apply_completed_texture_loads(
+        &params.pending_texture_loads,
+        &mut params.images,
+        &mut params.materials,
+    );
     let ctx = params.contexts.ctx_mut()?.clone();
     let mut viewport_ui = Ui::new(
         ctx.clone(),
@@ -170,7 +180,11 @@ fn load_nif(file_name: &str, params: &mut UiSystemParams) {
     bevy::log::info!("Loading NIF file: {file_name}");
 
     let bytes = if let Some(fs) = params.fsstate.file_system.write().unwrap().deref_mut() {
-        let bytes = fs.read(file_name, true).map(|b| b.to_vec());
+        let bytes = bevy::tasks::futures_lite::future::block_on(
+            bevy::tasks::futures_lite::future::poll_once(fs.read(file_name, true)),
+        )
+        .flatten()
+        .map(|bytes| bytes.to_vec());
 
         if bytes.is_some() {
             fs.rebase_to_file(file_name);

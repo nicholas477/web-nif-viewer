@@ -47,13 +47,22 @@ fn main() {
         .add_systems(Startup, setup_system)
         .init_resource::<UIState>()
         .init_resource::<FSState>()
+        .init_resource::<nif::PendingTextureLoads>()
         .add_observer(ui::picking::select_mesh)
         .add_systems(Update, ui::picking::clear_selection_on_viewport_click)
         .add_systems(EguiPrimaryContextPass, ui::ui_system)
         .add_systems(Update, input::input_system);
 
-    app.add_systems(Startup, ui::initialize_default_mesh);
+    #[cfg(target_arch = "wasm32")]
     app.add_systems(Startup, ui::initialize_resources);
+    #[cfg(target_arch = "wasm32")]
+    app.add_systems(Update, ui::initialize_default_mesh_after_resources);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_systems(
+        Startup,
+        (ui::initialize_resources, ui::initialize_default_mesh).chain(),
+    );
 
     app.run();
 }

@@ -135,6 +135,7 @@ impl std::default::Default for ViewState {
 pub struct TopPanelState {
     pub show_nif_popup: bool,
     pub show_resources: bool,
+    pub show_resource_permission_prompt: bool,
     pub resource_paths: Vec<String>,
     pub selected_resource: Option<usize>,
 }
@@ -159,9 +160,9 @@ pub struct FSState {
 
 impl FSState {
     /// Read from the resource file systems
-    pub fn resource_read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
+    pub async fn resource_read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
         for fs in self.resource_file_systems.read().unwrap().iter() {
-            if let Some(data) = fs.read(path, false) {
+            if let Some(data) = fs.read(path, false).await {
                 return Some(data);
             }
         }
@@ -179,12 +180,18 @@ impl Default for FSState {
 }
 
 impl file::Filesystem for FSState {
-    fn read(&self, path: &str, absolute_paths: bool) -> Option<ArcSlice<[u8]>> {
+    fn read<'a>(
+        &'a self,
+        path: &'a str,
+        absolute_paths: bool,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+        Box::pin(async move {
         if let Some(fs) = self.file_system.read().unwrap().as_ref()
-            && let Some(data) = fs.read(path, absolute_paths) {
+            && let Some(data) = fs.read(path, absolute_paths).await {
                 return Some(data);
             }
-        self.resource_read(path)
+        self.resource_read(path).await
+        })
     }
 
     fn absolute_paths(&self) -> Vec<String> {

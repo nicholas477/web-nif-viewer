@@ -10,6 +10,7 @@ pub use mesh::*;
 pub fn apply_view_options(
     view_options: crate::ViewOptions,
     materials: &mut Assets<crate::PhongMaterial>,
+    pending_texture_loads: &PendingTextureLoads,
     loaded_materials: &mut Query<
         (
             &mut Mesh3d,
@@ -29,10 +30,15 @@ pub fn apply_view_options(
     >,
 ) {
     for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_materials.iter_mut() {
-        mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
+        mesh.0 = mesh_handle_for_options(view_options, &loaded_mesh);
         *visibility = visibility_for(view_options.collision, loaded_mesh.is_collision);
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            apply_material_options(&mut material, view_options, loaded_mesh);
+            apply_material_options(
+                &mut material,
+                view_options,
+                &loaded_mesh,
+                pending_texture_loads.texture_for(&material_handle.0),
+            );
         }
     }
 
@@ -64,6 +70,7 @@ fn apply_material_options(
     material: &mut crate::PhongMaterial,
     view_options: crate::ViewOptions,
     loaded_mesh: &LoadedNifMesh,
+    loaded_texture: Option<Handle<Image>>,
 ) {
     let use_vertex_colors = view_options.shading_mode == crate::ShadingMode::Normals
         || view_options.vertex_colors != crate::DisplayMode::Off;
@@ -73,7 +80,7 @@ fn apply_material_options(
         || view_options.vertex_colors == crate::DisplayMode::Only;
     material.color = LinearRgba::WHITE;
     material.color_texture = if use_texture {
-        loaded_mesh.diffuse_texture.clone()
+        loaded_texture.or_else(|| loaded_mesh.diffuse_texture.clone())
     } else {
         None
     };

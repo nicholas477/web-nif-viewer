@@ -2,13 +2,14 @@ use bevy::image::{
     CompressedImageFormats, ImageAddressMode, ImageFilterMode, ImageSampler,
     ImageSamplerDescriptor, ImageType,
 };
-use std::collections::{HashMap, HashSet};
+use arc_slice::ArcSlice;
+use std::{collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
 use tes3::nif::{
     NiCollisionSwitch, NiStencilProperty, NiStream, NiTriShape, NiTriShapeData, RootCollisionNode,
     Visitor,
 };
 
-use crate::{file::Filesystem, nif::*};
+use crate::nif::*;
 
 #[derive(Component)]
 pub struct LoadedNifMesh {
@@ -26,6 +27,97 @@ pub struct LoadedNifWireframe {
     pub nif_node_index: usize,
 }
 
+struct TextureLoadResult {
+    path: String,
+    bytes: Option<ArcSlice<[u8]>>,
+    material: Handle<crate::PhongMaterial>,
+}
+
+/// Collects asynchronous texture reads until they can be applied to Bevy assets.
+#[derive(Resource, Default, Clone)]
+pub struct PendingTextureLoads {
+    completed: Arc<Mutex<Vec<TextureLoadResult>>>,
+    textures: Arc<Mutex<HashMap<AssetId<crate::PhongMaterial>, Handle<Image>>>>,
+}
+
+impl PendingTextureLoads {
+    pub fn request(
+        &self,
+        fsstate: crate::state::FSState,
+        path: String,
+        material: Handle<crate::PhongMaterial>,
+    ) {
+        let completed = Arc::clone(&self.completed);
+        let read_path = path.clone();
+
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(async move {
+            bevy::log::info!("Loading texture asynchronously: {read_path}");
+            let bytes = crate::state::file::Filesystem::read(&fsstate, &read_path, false).await;
+            completed.lock().unwrap().push(TextureLoadResult { path, bytes, material });
+        });
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let bytes = bevy::tasks::futures_lite::future::block_on(
+                crate::state::file::Filesystem::read(&fsstate, &read_path, false),
+            );
+            completed.lock().unwrap().push(TextureLoadResult { path, bytes, material });
+        }
+    }
+
+    fn take_completed(&self) -> Vec<TextureLoadResult> {
+        std::mem::take(&mut *self.completed.lock().unwrap())
+    }
+
+    pub fn texture_for(&self, material: &Handle<crate::PhongMaterial>) -> Option<Handle<Image>> {
+        self.textures.lock().unwrap().get(&material.id()).cloned()
+    }
+}
+
+/// Decodes completed asynchronous texture reads and assigns them to their materials.
+pub fn apply_completed_texture_loads(
+    pending: &PendingTextureLoads,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<crate::PhongMaterial>,
+) {
+    for result in pending.take_completed() {
+        let Some(bytes) = result.bytes else {
+            bevy::log::warn!("Texture not found in archive or resource folders: {}", result.path);
+            continue;
+        };
+        let extension = result.path.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+        let sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: ImageAddressMode::Repeat,
+            address_mode_v: ImageAddressMode::Repeat,
+            mipmap_filter: ImageFilterMode::Linear,
+            mag_filter: ImageFilterMode::Linear,
+            min_filter: ImageFilterMode::Linear,
+            ..Default::default()
+        });
+        match Image::from_buffer(
+            &bytes,
+            ImageType::Extension(&extension),
+            CompressedImageFormats::all(),
+            true,
+            sampler,
+            bevy::asset::RenderAssetUsages::default(),
+        ) {
+            Ok(image) => {
+                let image = images.add(image);
+                pending.textures.lock().unwrap().insert(result.material.id(), image.clone());
+                if let Some(mut material) = materials.get_mut(&result.material) {
+                    if material.settings.x != 0.0 {
+                        material.color_texture = Some(image);
+                    }
+                    bevy::log::info!("Applied asynchronously loaded texture: {}", result.path);
+                }
+            }
+            Err(error) => bevy::log::warn!("Could not decode texture {}: {error}", result.path),
+        }
+    }
+}
+
 pub struct NifMeshLoadParams<'f, 'a, 'w, 's> {
     pub file: &'f [u8],
 
@@ -37,8 +129,8 @@ pub struct NifMeshLoadParams<'f, 'a, 'w, 's> {
     pub view_options: crate::ViewOptions,
     pub commands: &'a mut Commands<'w, 's>,
     pub meshes: &'a mut Assets<Mesh>,
-    pub images: &'a mut Assets<Image>,
     pub materials: &'a mut Assets<crate::PhongMaterial>,
+    pub pending_texture_loads: &'a mut PendingTextureLoads,
     pub loaded_meshes: &'a Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
     pub loaded_wireframes: &'a Query<'w, 's, Entity, With<LoadedNifWireframe>>,
 }
@@ -62,8 +154,8 @@ impl<'f, 'a, 'w, 's> NifMeshLoadParams<'f, 'a, 'w, 's> {
             view_options,
             commands: &mut ui_state.commands,
             meshes: &mut ui_state.meshes,
-            images: &mut ui_state.images,
             materials: &mut ui_state.materials,
+            pending_texture_loads: &mut ui_state.pending_texture_loads,
             loaded_meshes: &ui_state.loaded_meshes,
             loaded_wireframes: &ui_state.loaded_wireframe_entities,
         }
@@ -216,7 +308,7 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
             alpha_mode: AlphaMode::Opaque,
             cull_mode: Some(wgpu_types::Face::Back),
         };
-        let mut diffuse_texture = None;
+        let diffuse_texture = None;
 
         // Find NiStencilProperty as a child of this NiTriShape, if it exists
         if let Some(stencil_property) = shape
@@ -248,45 +340,7 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
             }
         }
 
-        if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) = params.fsstate.read(&texture_path, false) {
-                let extension = texture_path
-                    .rsplit('.')
-                    .next()
-                    .unwrap_or_default()
-                    .to_ascii_lowercase();
-
-                let sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    mipmap_filter: ImageFilterMode::Linear,
-                    mag_filter: ImageFilterMode::Linear,
-                    min_filter: ImageFilterMode::Linear,
-                    ..Default::default()
-                });
-
-                // Use the ImageAddressMode::Repeat for the texture to ensure it tiles correctly on the mesh
-                match Image::from_buffer(
-                    &texture_bytes,
-                    ImageType::Extension(&extension),
-                    CompressedImageFormats::all(),
-                    true,
-                    sampler,
-                    bevy::asset::RenderAssetUsages::default(),
-                ) {
-                    Ok(image) => {
-                        let texture = params.images.add(image);
-                        material.color_texture = Some(texture.clone());
-                        diffuse_texture = Some(texture);
-                    }
-                    Err(error) => {
-                        bevy::log::warn!("Could not decode texture {texture_path}: {error}");
-                    }
-                }
-            } else {
-                bevy::log::warn!("Texture not found in archive: {texture_path}");
-            }
-        }
+        let texture_path = diffuse_texture_path(&stream, shape);
 
         let mut uncolored_mesh = mesh.clone();
         uncolored_mesh.remove_attribute(Mesh::ATTRIBUTE_COLOR);
@@ -329,7 +383,7 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
             nif_node_index: Some(nif_node_index),
         };
         let is_collision = loaded_mesh.is_collision;
-        apply_material_options(&mut material, params.view_options, &loaded_mesh);
+        apply_material_options(&mut material, params.view_options, &loaded_mesh, None);
         let base_visibility = visibility_for(params.view_options.collision, is_collision);
         let wireframe_transform = Transform {
             scale: transform.scale * 1.0001,
@@ -337,13 +391,22 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
         };
 
         // Mesh spawned here
+        let material_handle = params.materials.add(material);
         params.commands.spawn((
             Mesh3d(mesh_handle_for_options(params.view_options, &loaded_mesh)),
-            MeshMaterial3d(params.materials.add(material)),
+            MeshMaterial3d(material_handle.clone()),
             transform,
             base_visibility,
             loaded_mesh,
         ));
+
+        if let Some(texture_path) = texture_path {
+            params.pending_texture_loads.request(
+                params.fsstate.clone(),
+                texture_path,
+                material_handle.clone(),
+            );
+        }
 
         let mut wireframe_mesh = Mesh::new(
             bevy::render::render_resource::PrimitiveTopology::LineList,

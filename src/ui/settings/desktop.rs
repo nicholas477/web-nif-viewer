@@ -117,5 +117,7 @@ pub fn draw_resources(ctx: &bevy_egui::egui::Context, params: &mut crate::ui::Ui
     if changed {
         save_resources(&params.state.top_panel.resource_paths);
         rebuild_resources(&mut params.fsstate, &params.state.top_panel.resource_paths);
+        params.state.archive.pending_file = params.state.archive.selected_file.clone();
+        bevy::log::info!("Resource folders changed; reloading textures for the active NIF");
     }
 }

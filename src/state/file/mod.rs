@@ -18,13 +18,19 @@ use arc_slice::ArcSlice;
 use std::{
     collections::HashMap,
     fmt,
+    future::Future,
     io::{self, Cursor, Read},
+    pin::Pin,
     sync::{Arc, RwLock},
 };
 use zip::ZipArchive;
 
 pub trait Filesystem: Sync + Send {
-    fn read(&self, path: &str, absolute_path: bool) -> Option<ArcSlice<[u8]>>;
+    fn read<'a>(
+        &'a self,
+        path: &'a str,
+        absolute_path: bool,
+    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>>;
 
     fn absolute_paths(&self) -> Vec<String>;
 
@@ -34,7 +40,7 @@ pub trait Filesystem: Sync + Send {
     }
 
     /// Sets the base path for this filesystem, if applicable.
-    fn set_base(&self, base: String) {
+    fn set_base(&self, _base: String) {
         // Default implementation does nothing.
     }
 
