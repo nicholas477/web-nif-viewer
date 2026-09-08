@@ -119,6 +119,32 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                     }
 
                     #[cfg(target_arch = "wasm32")]
+                    if ui
+                        .add_enabled(
+                            params.state.archive.recent_source == crate::RecentFileSource::Url,
+                            egui::Button::new("Download Archive"),
+                        )
+                        .clicked()
+                    {
+                        file::download_archive(params.state.archive.zip_url_input.clone());
+                        ui.close();
+                    }
+
+                    #[cfg(target_arch = "wasm32")]
+                    if ui
+                        .add_enabled(
+                            params.state.archive.recent_source == crate::RecentFileSource::Url
+                                && params.state.archive.selected_file.is_some(),
+                            egui::Button::new("Download File"),
+                        )
+                        .clicked()
+                        && let Some(file_name) = params.state.archive.selected_file.as_deref()
+                    {
+                        file::download_file(&params.fsstate, file_name);
+                        ui.close();
+                    }
+
+                    #[cfg(target_arch = "wasm32")]
                     if ui.button("Upload File").clicked() {
                         file::open_upload_picker(&mut params.state);
                     }

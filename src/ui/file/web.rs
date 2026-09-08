@@ -35,6 +35,66 @@ pub fn open_url_dialog(state: &mut crate::UIState, _fsstate: &mut crate::state::
     state.archive.show_zip_popup = true;
 }
 
+/// Downloads an extracted archive file through the browser.
+pub fn download_file(fsstate: &crate::state::FSState, file_name: &str) {
+    let bytes = fsstate
+        .file_system
+        .read()
+        .unwrap()
+        .as_ref()
+        .and_then(|file_system| {
+            bevy::tasks::futures_lite::future::block_on(
+                bevy::tasks::futures_lite::future::poll_once(file_system.read(file_name, true)),
+            )
+            .flatten()
+        });
+    let Some(bytes) = bytes else {
+        bevy::log::warn!("Unable to download missing archive file: {file_name}");
+        return;
+    };
+    download_bytes(bytes.as_ref(), file_name);
+}
+
+/// Downloads the source archive through the browser.
+pub fn download_archive(archive_url: String) {
+    spawn_local(async move {
+        match crate::state::file::fetch_file_from_server(&archive_url).await {
+            Ok(bytes) => download_bytes(&bytes, "archive.zip"),
+            Err(error) => bevy::log::warn!("Unable to download archive: {error:?}"),
+        }
+    });
+}
+
+fn download_bytes(bytes: &[u8], file_name: &str) {
+    let parts = js_sys::Array::new();
+    parts.push(&js_sys::Uint8Array::from(bytes).into());
+    let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence(&parts) else {
+        bevy::log::warn!("Unable to create download data for {file_name}");
+        return;
+    };
+    let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
+        bevy::log::warn!("Unable to create download URL for {file_name}");
+        return;
+    };
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        bevy::log::warn!("Unable to access the document for {file_name} download");
+        return;
+    };
+    let Ok(element) = document.create_element("a") else {
+        bevy::log::warn!("Unable to create download link for {file_name}");
+        return;
+    };
+    let Ok(anchor) = element.dyn_into::<web_sys::HtmlAnchorElement>() else {
+        bevy::log::warn!("Unable to create download link for {file_name}");
+        return;
+    };
+
+    anchor.set_href(&url);
+    anchor.set_download(file_name.rsplit(['/', '\\']).next().unwrap_or(file_name));
+    anchor.click();
+    let _ = web_sys::Url::revoke_object_url(&url);
+}
+
 /// Draws the browser archive URL dialog and starts loading the submitted URL.
 pub fn draw_url_dialog(
     ctx: &bevy_egui::egui::Context,
