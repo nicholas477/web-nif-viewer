@@ -89,6 +89,10 @@ impl Filesystem for HashmapFS {
         true
     }
 
+    fn base(&self) -> Option<String> {
+        Some(self.base.read().unwrap().clone())
+    }
+
     fn set_base(&self, base: String) {
         *self.base.write().unwrap() = base;
     }

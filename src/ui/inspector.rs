@@ -7,6 +7,7 @@ use tes3::nif::Inspect;
 pub fn draw(
     ui: &mut Ui,
     loaded_file_names: &[String],
+    archive_base: Option<&str>,
     resource_paths: &[String],
     resource_file_names: &[Vec<String>],
     missing_paths: &[String],
@@ -34,6 +35,9 @@ pub fn draw(
                     egui::CollapsingHeader::new("Loaded files")
                         .default_open(true)
                         .show(ui, |ui| {
+                            if let Some(archive_base) = archive_base.filter(|base| !base.is_empty()) {
+                                ui.label(format!("Archive base: {archive_base}"));
+                            }
                             if loaded_file_names.is_empty() {
                                 ui.label("No archive or NIF loaded");
                             } else {

@@ -82,13 +82,13 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
             .layer_id(LayerId::background())
             .max_rect(ctx.viewport_rect()),
     );
-    let loaded_file_names = params
+    let (loaded_file_names, archive_base) = params
         .fsstate
         .file_system
         .read()
         .unwrap()
         .as_ref()
-        .map(|file_system| file_system.absolute_paths())
+        .map(|file_system| (file_system.absolute_paths(), file_system.base()))
         .unwrap_or_default();
     let resource_paths = params.state.top_panel.resource_paths.clone();
     let resource_file_names = params
@@ -131,6 +131,7 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
             inspector::draw(
                 ui,
                 &loaded_file_names,
+                archive_base.as_deref(),
                 &resource_paths,
                 &resource_file_names,
                 &missing_paths,

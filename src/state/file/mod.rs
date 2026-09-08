@@ -41,6 +41,11 @@ pub trait Filesystem: Sync + Send {
         false
     }
 
+    /// Returns the configured base path, when this filesystem has one.
+    fn base(&self) -> Option<String> {
+        None
+    }
+
     /// Sets the base path for this filesystem, if applicable.
     fn set_base(&self, _base: String) {
         // Default implementation does nothing.

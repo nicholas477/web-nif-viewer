@@ -20,12 +20,12 @@ pub fn initialize_default_mesh(
 
     state.archive.zip_url_input = query_state.path.clone();
     state.archive.recent_source = query_state.source;
-    state.archive.pending_file = Some(query_state.selected_file);
+    state.view = query_state.view_state.clone();
     start_archive_load(
         state.into_inner(),
         fsstate.into_inner(),
         query_state.path,
-        None,
+        Some(query_state.selected_file),
         query_state.source,
     );
 }
@@ -166,6 +166,7 @@ pub fn start_archive_load(
         });
         return;
     }
+    let pending_file = pending_file.map(|file_name| crate::state::file::normalize_path(&file_name));
     crate::state::query::update_query(&query::QueryState {
         path: zip_url.clone(),
         selected_file: pending_file
