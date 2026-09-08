@@ -21,6 +21,11 @@ impl RealFS {
             inner: RwLock::new(HashMap::new()),
         }
     }
+
+    /// Clears files resolved for the previously loaded NIF.
+    pub fn clear_cache(&self) {
+        self.inner.write().unwrap().clear();
+    }
 }
 
 impl Filesystem for RealFS {

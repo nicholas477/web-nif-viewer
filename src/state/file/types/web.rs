@@ -29,6 +29,11 @@ impl RealFS {
             resolved_paths: RwLock::new(HashSet::new()),
         }
     }
+
+    /// Clears files resolved for the previously loaded NIF.
+    pub fn clear_cache(&self) {
+        self.resolved_paths.write().unwrap().clear();
+    }
 }
 
 async fn file_handle_for_path(

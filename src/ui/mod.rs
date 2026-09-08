@@ -194,6 +194,9 @@ fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
 fn load_nif(file_name: &str, params: &mut UiSystemParams) {
     bevy::log::info!("Loading NIF file: {file_name}");
     params.pending_texture_loads.clear_missing_paths();
+    for resource_file_system in params.fsstate.resource_file_systems.read().unwrap().iter() {
+        resource_file_system.clear_cache();
+    }
 
     let bytes = if let Some(fs) = params.fsstate.file_system.write().unwrap().deref_mut() {
         let bytes = bevy::tasks::futures_lite::future::block_on(
