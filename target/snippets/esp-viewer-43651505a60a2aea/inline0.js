@@ -67,3 +67,5 @@ export function move_resource_directory(index, destination) {
   saveResourceDirectories().catch(() => {});
     resourceFilesystemUpdated = true;
 }
+export function load_key_bindings() { return localStorage.getItem('keyBindings'); }
+export function save_key_bindings(bindings) { localStorage.setItem('keyBindings', bindings); }
