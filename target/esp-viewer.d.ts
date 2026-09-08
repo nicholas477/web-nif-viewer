@@ -13,8 +13,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly fetch_file_from_server: (a: number, b: number) => any;
-    readonly pick_directory: () => any;
     readonly main: (a: number, b: number) => number;
+    readonly pick_directory: () => any;
     readonly rust_zstd_wasm_shim_calloc: (a: number, b: number) => number;
     readonly rust_zstd_wasm_shim_free: (a: number) => void;
     readonly rust_zstd_wasm_shim_malloc: (a: number) => number;
