@@ -27,6 +27,20 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                     }
 
                     file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
+
+                    ui.separator();
+
+                    #[cfg(target_arch = "wasm32")]
+                    if ui.button("Upload File").clicked() {
+                        file::open_upload_picker(&mut params.state);
+                    }
+                });
+
+                ui.menu_button("Settings", |ui| {
+                    if ui.button("Resources").clicked() {
+                        params.state.top_panel.show_resources = true;
+                        ui.close();
+                    }
                 });
 
                 // #[cfg(target_arch = "wasm32")]

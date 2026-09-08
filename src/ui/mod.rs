@@ -1,15 +1,19 @@
 mod file;
 mod inspector;
 pub mod picking;
+mod settings;
 mod top_panel;
+
+use std::ops::{Deref, DerefMut};
 
 use bevy::{camera::Viewport, ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 use bevy_egui::{EguiContext, EguiContexts, egui};
 use egui::{LayerId, Ui, UiBuilder};
 
 pub use file::initialize_default_mesh;
+pub use settings::initialize_resources;
 
-use crate::nif::LoadedNifMesh;
+use crate::{file::{Filesystem, get_nif_base_dir}, nif::LoadedNifMesh};
 
 /// System parameter struct of doom and despair
 #[derive(SystemParam)]
@@ -68,7 +72,7 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
             .layer_id(LayerId::background())
             .max_rect(ctx.viewport_rect()),
     );
-    let file_names = params.fsstate.file_system.read().unwrap().paths();
+    let file_names = params.fsstate.absolute_paths();
 
     #[cfg(target_arch = "wasm32")]
     let uploaded_download_url = {
@@ -139,6 +143,8 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
         file::draw_file_popup(&ctx, &mut params);
     }
 
+    settings::draw_resources(&ctx, &mut params);
+
     file::draw_load_status(&ctx, &params.state);
     file::draw_upload_status(&ctx, &params.state);
     file::draw_error_popup(&ctx, &mut params.state);
@@ -161,22 +167,43 @@ fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
 
 /// Loads a NIF into Bevy assets, records failures, and frames the camera on success.
 fn load_nif(file_name: &str, params: &mut UiSystemParams) {
-    match crate::nif::load_nif(crate::nif::NifMeshLoadParams::from_ui_state(
-        file_name, params,
-    )) {
-        Ok(()) => {
-            crate::state::recent_files::record_recent_file(
-                &params.state.archive.zip_url_input,
-                file_name,
-            );
-            let (_, projection, pan_orbit) = &mut *params.camera3d;
-            crate::camera::focus_loaded_meshes(
-                &params.meshes,
-                projection,
-                &params.window,
-                pan_orbit,
-            );
+    bevy::log::info!("Loading NIF file: {file_name}");
+
+    let bytes = if let Some(fs) = params.fsstate.file_system.write().unwrap().deref_mut() {
+        let bytes = fs.read(file_name, true).map(|b| b.to_vec());
+
+        if bytes.is_some() {
+            fs.rebase_to_file(file_name);
         }
-        Err(error) => params.state.archive.nif_load_error = Some(error),
-    }
+
+        bytes
+    } else {
+        bevy::log::warn!("No filesystem available");
+        return;
+    };
+
+    let Some(bytes) = bytes else {
+        bevy::log::warn!("Unable to find nif file: {file_name}");
+        return;
+    };
+
+    match crate::nif::load_nif(crate::nif::NifMeshLoadParams::from_ui_state(
+            bytes.as_slice(),
+            params,
+        )) {
+            Ok(()) => {
+                crate::state::recent_files::record_recent_file(
+                    &params.state.archive.zip_url_input,
+                    file_name,
+                );
+                let (_, projection, pan_orbit) = &mut *params.camera3d;
+                crate::camera::focus_loaded_meshes(
+                    &params.meshes,
+                    projection,
+                    &params.window,
+                    pan_orbit,
+                );
+            }
+            Err(error) => params.state.archive.nif_load_error = Some(error),
+        }
 }

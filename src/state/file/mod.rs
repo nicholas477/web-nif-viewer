@@ -14,9 +14,7 @@ mod types;
 
 pub use types::*;
 
-#[cfg(test)]
-mod tests;
-
+use arc_slice::ArcSlice;
 use std::{
     collections::HashMap,
     fmt,
@@ -24,11 +22,29 @@ use std::{
     sync::{Arc, RwLock},
 };
 use zip::ZipArchive;
-use arc_slice::ArcSlice;
 
 pub trait Filesystem: Sync + Send {
-    fn read(&self, path: &str) -> Option<ArcSlice<[u8]>>;
-    fn paths(&self) -> Vec<String>;
+    fn read(&self, path: &str, absolute_path: bool) -> Option<ArcSlice<[u8]>>;
+
+    fn absolute_paths(&self) -> Vec<String>;
+
+    /// If this filesystem has a base path where it contains meshes/textures folder
+    fn has_base(&self) -> bool {
+        false
+    }
+
+    /// Sets the base path for this filesystem, if applicable.
+    fn set_base(&self, base: String) {
+        // Default implementation does nothing.
+    }
+
+    fn rebase_to_file(&self, file_path: &str) {
+        if self.has_base() {
+            bevy::log::info!("Rebasing to file: {}", file_path);
+            let base = get_nif_base_dir(file_path).to_string();
+            self.set_base(base);
+        }
+    }
 }
 
 pub type ArchiveLoadStatus = Arc<RwLock<crate::ArchiveLoadStatus>>;
@@ -98,29 +114,6 @@ pub fn unzip(
     Ok(file_system)
 }
 
-/// Finds a NIF asset reference relative to its source file, searching each ancestor directory.
-pub fn find_file(
-    file_system: &dyn Filesystem,
-    source_path: &str,
-    requested_path: &str,
-) -> Option<Vec<u8>> {
-    let requested_path = requested_path.replace('/', "\\");
-    //let file_system = file_system.read().ok()?;
-
-    for directory in ancestor_directories(source_path) {
-        let candidate = if directory.is_empty() {
-            normalize_path(&requested_path)
-        } else {
-            normalize_path(&format!("{directory}\\{requested_path}"))
-        };
-        if let Some(bytes) = file_system.read(&candidate) {
-            return Some(bytes.to_vec());
-        }
-    }
-
-    None
-}
-
 /// Converts an archive path to the viewer's canonical backslash lowercase form.
 pub fn normalize_path(path: &str) -> String {
     path.replace('/', "\\")
@@ -136,29 +129,4 @@ pub fn normalize_path(path: &str) -> String {
         })
         .join("\\")
         .to_ascii_lowercase()
-}
-
-/// Returns the source file's directory followed by every parent through the archive root.
-fn ancestor_directories(source_path: &str) -> impl Iterator<Item = String> {
-    let mut directories = Vec::new();
-    let mut directory = normalize_path(source_path)
-        .rsplit_once('\\')
-        .map(|(directory, _)| directory.to_string());
-
-    loop {
-        match directory.take() {
-            Some(current) => {
-                directory = current
-                    .rsplit_once('\\')
-                    .map(|(parent, _)| parent.to_string());
-                directories.push(current);
-            }
-            None => {
-                directories.push(String::new());
-                break;
-            }
-        }
-    }
-
-    directories.into_iter()
 }

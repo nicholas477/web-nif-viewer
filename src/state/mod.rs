@@ -4,6 +4,8 @@ use arc_slice::ArcSlice;
 use bevy::prelude::*;
 use tes3::nif::NiType;
 
+pub use crate::file::Filesystem;
+
 // URL query state, only on wasm
 #[cfg(target_arch = "wasm32")]
 pub mod query;
@@ -33,7 +35,7 @@ pub struct RecentFile {
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 pub struct RecentFiles {
-    pub files : Vec<RecentFile>,
+    pub files: Vec<RecentFile>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -131,7 +133,10 @@ impl std::default::Default for ViewState {
 
 #[derive(Clone, Default)]
 pub struct TopPanelState {
-    pub show_nif_popup: bool
+    pub show_nif_popup: bool,
+    pub show_resources: bool,
+    pub resource_paths: Vec<String>,
+    pub selected_resource: Option<usize>,
 }
 
 #[derive(Resource, Default, Clone)]
@@ -144,30 +149,60 @@ pub struct UIState {
 
 #[derive(Resource, Clone)]
 pub struct FSState {
-    pub file_system: Arc<RwLock<Box<dyn crate::state::file::Filesystem>>>,
+    /// Filesystems probably loaded by the user, including zips and other external resources.
+    pub file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
+
+    /// Filesystems imported from the resources settings.
+    /// These always have lower priority than the user-loaded filesystems.
+    pub resource_file_systems: Arc<RwLock<Vec<crate::state::file::RealFS>>>,
+}
+
+impl FSState {
+    /// Read from the resource file systems
+    pub fn resource_read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
+        for fs in self.resource_file_systems.read().unwrap().iter() {
+            if let Some(data) = fs.read(path, false) {
+                return Some(data);
+            }
+        }
+        None
+    }
 }
 
 impl Default for FSState {
     fn default() -> Self {
         Self {
-            file_system: Arc::new(RwLock::new(Box::new(crate::state::file::NullFS))),
+            file_system: Arc::new(RwLock::new(None)),
+            resource_file_systems: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
 
-impl FSState {
-    pub fn set_filesystem(&mut self, fs: Box<dyn crate::state::file::Filesystem>) {
-        *self.file_system.write().unwrap() = fs;
-    }
-}
-
 impl file::Filesystem for FSState {
-    fn read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
-        self.file_system.read().unwrap().read(path)
+    fn read(&self, path: &str, absolute_paths: bool) -> Option<ArcSlice<[u8]>> {
+        if let Some(fs) = self.file_system.read().unwrap().as_ref()
+            && let Some(data) = fs.read(path, absolute_paths) {
+                return Some(data);
+            }
+        self.resource_read(path)
     }
 
-    fn paths(&self) -> Vec<String> {
-        self.file_system.read().unwrap().paths()
+    fn absolute_paths(&self) -> Vec<String> {
+        let mut hash_set: std::collections::HashSet<_> =
+            if let Some(fs) = self.file_system.read().unwrap().as_ref() {
+                fs.absolute_paths().into_iter().collect()
+            } else {
+                std::collections::HashSet::new()
+            };
+
+        hash_set.extend(
+            self.resource_file_systems
+                .read()
+                .unwrap()
+                .iter()
+                .flat_map(|fs| fs.absolute_paths()),
+        );
+        hash_set.into_iter().collect()
     }
 }
 

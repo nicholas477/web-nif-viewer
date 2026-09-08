@@ -106,7 +106,7 @@ pub fn start_archive_load(
     state.archive.zip_url_input = zip_url.clone();
     state.archive.selected_file = None;
     state.archive.pending_file = pending_file;
-    fsstate.set_filesystem(Box::new(crate::state::file::NullFS));
+    fsstate.file_system.write().unwrap().take();
     {
         let mut status = state.archive.archive_load_status.write().unwrap();
         status.phase = Some("Preparing download...".to_string());
@@ -122,7 +122,7 @@ pub fn start_archive_load(
 /// Fetches an archive asynchronously and publishes its files or error status.
 fn fetch_archive(
     zip_url: String,
-    file_system: Arc<RwLock<Box<dyn crate::state::file::Filesystem>>>,
+    file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
     load_status: Arc<RwLock<crate::ArchiveLoadStatus>>,
 ) {
     spawn_local(async move {
@@ -130,7 +130,7 @@ fn fetch_archive(
             Ok(files) => {
                 bevy::log::info!("Zip fetched and parsed successfully.");
                 *file_system.write().unwrap() =
-                    Box::new(crate::state::file::HashmapFS::new_from_vec(files));
+                    Some(Box::new(crate::state::file::HashmapFS::new_from_vec("".into(), files)));
             }
             Err(error) => {
                 let message = error.to_string();

@@ -53,6 +53,7 @@ fn main() {
         .add_systems(Update, input::input_system);
 
     app.add_systems(Startup, ui::initialize_default_mesh);
+    app.add_systems(Startup, ui::initialize_resources);
 
     app.run();
 }

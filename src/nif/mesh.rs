@@ -8,7 +8,7 @@ use tes3::nif::{
     Visitor,
 };
 
-use crate::nif::*;
+use crate::{file::Filesystem, nif::*};
 
 #[derive(Component)]
 pub struct LoadedNifMesh {
@@ -26,8 +26,9 @@ pub struct LoadedNifWireframe {
     pub nif_node_index: usize,
 }
 
-pub struct NifMeshLoadParams<'a, 'w, 's> {
-    pub file_name: String,
+pub struct NifMeshLoadParams<'f, 'a, 'w, 's> {
+    pub file: &'f [u8],
+
     pub fsstate: &'a crate::state::FSState,
     pub nif_objects: &'a mut Vec<crate::NifObjectInfo>,
     pub nif_roots: &'a mut Vec<usize>,
@@ -42,17 +43,17 @@ pub struct NifMeshLoadParams<'a, 'w, 's> {
     pub loaded_wireframes: &'a Query<'w, 's, Entity, With<LoadedNifWireframe>>,
 }
 
-impl<'a, 'w, 's> NifMeshLoadParams<'a, 'w, 's> {
+impl<'f, 'a, 'w, 's> NifMeshLoadParams<'f, 'a, 'w, 's> {
     /// Collects the NIF loader inputs from the UI system state.
     pub fn from_ui_state(
-        file_name: impl Into<String>,
+        file: &'f [u8],
         ui_state: &'a mut crate::ui::UiSystemParams<'w, 's>,
     ) -> Self {
         let view_options = crate::ViewOptions::from(&*ui_state.state);
         let inspector = &mut ui_state.state.inspector;
 
         Self {
-            file_name: file_name.into(),
+            file,
             fsstate: &ui_state.fsstate,
             nif_objects: &mut inspector.nif_objects,
             nif_roots: &mut inspector.nif_roots,
@@ -70,24 +71,9 @@ impl<'a, 'w, 's> NifMeshLoadParams<'a, 'w, 's> {
 }
 
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
-pub fn load_nif(
-    params: NifMeshLoadParams
-) -> Result<(), String> {
-    bevy::log::info!("Loading NIF file: {}", params.file_name);
-
-    let file_system = params.fsstate.file_system.read().unwrap();
-    let file_bytes = file_system.read(&params.file_name).map(|b| b.to_vec());
-
-    let Some(file_bytes) = file_bytes else {
-        return Err(format!("Selected file is no longer available: {}", params.file_name));
-    };
-
-    if !params.file_name.to_ascii_lowercase().ends_with(".nif") {
-        return Err(format!("The selected file is not a NIF: {}", params.file_name));
-    }
-
-    let Ok(stream) = NiStream::from_bytes(&file_bytes) else {
-        return Err(format!("Could not parse the NIF file: {}", params.file_name));
+pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
+    let Ok(stream) = NiStream::from_bytes(&params.file) else {
+        return Err(format!("Could not parse the NIF file"));
     };
 
     let object_indices = stream
@@ -263,9 +249,7 @@ pub fn load_nif(
         }
 
         if let Some(texture_path) = diffuse_texture_path(&stream, shape) {
-            if let Some(texture_bytes) =
-                crate::state::file::find_file(file_system.as_ref(), &params.file_name, &texture_path)
-            {
+            if let Some(texture_bytes) = params.fsstate.read(&texture_path, false) {
                 let extension = texture_path
                     .rsplit('.')
                     .next()
@@ -296,9 +280,7 @@ pub fn load_nif(
                         diffuse_texture = Some(texture);
                     }
                     Err(error) => {
-                        bevy::log::warn!(
-                            "Could not decode texture {texture_path} for {}: {error}", params.file_name
-                        );
+                        bevy::log::warn!("Could not decode texture {texture_path}: {error}");
                     }
                 }
             } else {
@@ -418,9 +400,9 @@ pub fn load_nif(
     }
 
     if shape_count == 0 {
-        return Err(format!("No renderable meshes were found in: {}", params.file_name));
+        return Err(format!("No renderable meshes were found in NIF file!"));
     }
 
-    bevy::log::info!("Spawned {shape_count} NiTriShape meshes from {}", params.file_name);
+    bevy::log::info!("Spawned {shape_count} NiTriShape meshes from NIF file");
     Ok(())
 }

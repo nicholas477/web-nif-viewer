@@ -132,33 +132,35 @@ async fn get_bytes_from_file_handle(
 }
 
 impl Filesystem for RealFS {
-    fn read(&self, path: &str) -> Option<ArcSlice<[u8]>> {
-        if let Some(data) = self.inner.read().unwrap().get(path).cloned() {
-            return Some(data);
-        }
+    fn read(&self, path: &str, _absolute_path: bool) -> Option<ArcSlice<[u8]>> {
+        // if let Some(data) = self.inner.read().unwrap().get(path).cloned() {
+        //     return Some(data);
+        // }
 
-        let res = block_on(get_file_by_path(&self.fs_handle, path));
-        if let Some(bytes_arc) = match res {
-            Ok(file_handle) => {
-                let bytes = block_on(get_bytes_from_file_handle(&file_handle));
-                match bytes {
-                    Ok(data) => Some(ArcSlice::from(data.as_slice())),
-                    Err(_) => None,
-                }
-            }
-            Err(_) => None,
-        } {
-            self.inner
-                .write()
-                .unwrap()
-                .insert(path.to_string(), bytes_arc.clone());
-            Some(bytes_arc)
-        } else {
-            None
-        }
+        // let res = block_on(get_file_by_path(&self.fs_handle, path));
+        // if let Some(bytes_arc) = match res {
+        //     Ok(file_handle) => {
+        //         let bytes = block_on(get_bytes_from_file_handle(&file_handle));
+        //         match bytes {
+        //             Ok(data) => Some(ArcSlice::from(data.as_slice())),
+        //             Err(_) => None,
+        //         }
+        //     }
+        //     Err(_) => None,
+        // } {
+        //     self.inner
+        //         .write()
+        //         .unwrap()
+        //         .insert(path.to_string(), bytes_arc.clone());
+        //     Some(bytes_arc)
+        // } else {
+        //     None
+        // }
+
+        None
     }
 
-    fn paths(&self) -> Vec<String> {
+    fn absolute_paths(&self) -> Vec<String> {
         self.inner.read().unwrap().keys().cloned().collect()
     }
 }
