@@ -2,6 +2,20 @@ use crate::ui::{UiSystemParams, file};
 use bevy::prelude::*;
 use bevy_egui::egui::{self, InnerResponse, Ui};
 
+fn load_file(file: Box<dyn crate::ui::file::PickerFile>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen_futures::spawn_local;
+
+        spawn_local(async move {
+            let bytes = file.read().await;
+            if let Some(bytes) = bytes {
+                bevy::log::info!("Read {} bytes from file: {:#?}", bytes.len(), file);
+            }
+        });
+    }
+}
+
 pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResponse<()> {
     egui::Panel::top("top_panel")
         .resizable(false)
@@ -9,14 +23,17 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
             ui.horizontal(|ui| {
                 ui.menu_button("File", |ui| {
                     #[cfg(target_arch = "wasm32")]
-                    if ui.button("Load URL").clicked() {
-                        file::open_archive_picker(&mut params.state, &mut params.fsstate);
-                        ui.close();
-                    }
+                    if ui.button("Open File").clicked() {
+                        use wasm_bindgen_futures::spawn_local;
 
-                    #[cfg(target_arch = "wasm32")]
-                    if ui.button("Open NIF").clicked() {
-                        params.state.top_panel.show_nif_popup = true;
+                        spawn_local(async move {
+                            if let Some(file) =
+                                file::pick_single_file(".nif,.zip,application/zip").await
+                            {
+                                bevy::log::info!("Selected file: {:#?}", file);
+                                load_file(file);
+                            }
+                        });
                         ui.close();
                     }
 
@@ -28,7 +45,14 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
 
                     file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
 
+                    #[cfg(target_arch = "wasm32")]
                     ui.separator();
+
+                    #[cfg(target_arch = "wasm32")]
+                    if ui.button("Load URL").clicked() {
+                        file::open_url_dialog(&mut params.state, &mut params.fsstate);
+                        ui.close();
+                    }
 
                     #[cfg(target_arch = "wasm32")]
                     if ui.button("Upload File").clicked() {
@@ -43,19 +67,6 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                     }
                 });
 
-                // #[cfg(target_arch = "wasm32")]
-                // if ui.button("Load URL").clicked() {
-                //     file::open_archive_picker(&mut params.state, &mut params.fsstate);
-                // }
-                // #[cfg(not(target_arch = "wasm32"))]
-                // if ui.button("Open File").clicked() {
-                //     file::open_archive_picker(&mut params.state, &mut params.fsstate);
-                // }
-                // #[cfg(target_arch = "wasm32")]
-                // if ui.button("Upload File").clicked() {
-                //     file::open_upload_picker(&mut params.state);
-                // }
-                // file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
                 draw_view_controls(ui, params);
             });
         })

@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use bevy_egui::egui;
 use directories::ProjectDirs;
 use rfd::FileDialog;
 
@@ -70,14 +71,27 @@ pub fn draw_resources(ctx: &bevy_egui::egui::Context, params: &mut crate::ui::Ui
         .show(ctx, |ui| {
             ui.label("Resource folders are searched in this order when an archive references a texture.");
             ui.separator();
-            for (index, path) in paths.iter().enumerate() {
-                if ui.selectable_label(selected == Some(index), path).clicked() {
-                    selected = Some(index);
-                }
+            
+            if !paths.is_empty() {
+                egui::ScrollArea::vertical().auto_shrink([false, false]).max_height(300.0).show(ui, |ui| {
+                    for (index, path) in paths.iter().enumerate() {
+                        if ui
+                            .selectable_label(
+                                selected == Some(index),
+                                format!("{} - {path}", index + 1).to_string(),
+                            )
+                            .clicked()
+                        {
+                            selected = Some(index);
+                        }
+                    }
+                });
             }
-            if paths.is_empty() {
+            else
+            {
                 ui.label("No resource folders configured.");
             }
+
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Add folder").clicked()

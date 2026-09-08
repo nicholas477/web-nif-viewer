@@ -25,12 +25,14 @@ use std::{
 };
 use zip::ZipArchive;
 
+pub type ReadResult<'a> = Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>>;
+
 pub trait Filesystem: Sync + Send {
     fn read<'a>(
         &'a self,
         path: &'a str,
         absolute_path: bool,
-    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>>;
+    ) -> ReadResult<'a>;
 
     fn absolute_paths(&self) -> Vec<String>;
 

@@ -12,6 +12,9 @@ pub use web::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use desktop::*;
 
+mod picker;
+pub use picker::*;
+
 pub const DEFAULT_MESH: (&str, &str) = (
     "assets/tr_mw_flora_tree_indoril_elm.zip",
     "meshes\\tr\\f\\tr_f_indoril_elm_01.nif",

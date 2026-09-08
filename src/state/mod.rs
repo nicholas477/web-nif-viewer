@@ -186,11 +186,12 @@ impl file::Filesystem for FSState {
         absolute_paths: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
         Box::pin(async move {
-        if let Some(fs) = self.file_system.read().unwrap().as_ref()
-            && let Some(data) = fs.read(path, absolute_paths).await {
+            if let Some(fs) = self.file_system.read().unwrap().as_ref()
+                && let Some(data) = fs.read(path, absolute_paths).await
+            {
                 return Some(data);
             }
-        self.resource_read(path).await
+            self.resource_read(path).await
         })
     }
 

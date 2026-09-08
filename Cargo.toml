@@ -41,6 +41,7 @@ serde_toml = "0.0.1"
 slotmap = "1.1.1"
 arc-slice = "0.1.0"
 async-trait = "0.1.92"
+futures = {version = "0.3.34", features = ["alloc"] }
 
 [dependencies.bevy]
 version = "0.19.1"

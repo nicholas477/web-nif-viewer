@@ -1,4 +1,6 @@
-use std::{collections::HashMap, future::Future, pin::Pin, sync::RwLock};
+use std::{collections::HashMap, sync::RwLock};
+
+use crate::file::ReadResult;
 
 use super::Filesystem;
 use arc_slice::ArcSlice;
@@ -27,7 +29,7 @@ impl Filesystem for NullFS {
         &'a self,
         _path: &'a str,
         _absolute_path: bool,
-    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+    ) -> ReadResult<'a> {
         Box::pin(async { None })
     }
 
@@ -95,7 +97,7 @@ impl Filesystem for HashmapFS {
         &'a self,
         path: &'a str,
         absolute_path: bool,
-    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+    ) -> ReadResult<'a> {
         Box::pin(async move {
             let base_is_empty = self.base.read().unwrap().is_empty();
 
@@ -148,7 +150,7 @@ impl Filesystem for CombinedFS {
         &'a self,
         path: &'a str,
         absolute_path: bool,
-    ) -> Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>> {
+    ) -> ReadResult<'a> {
         Box::pin(async move {
             for fs in self.inner.read().unwrap().iter() {
                 if let Some(data) = fs.read(path, absolute_path).await {

@@ -30,13 +30,13 @@ pub fn apply_view_options(
     >,
 ) {
     for (mut mesh, material_handle, mut visibility, loaded_mesh) in loaded_materials.iter_mut() {
-        mesh.0 = mesh_handle_for_options(view_options, &loaded_mesh);
+        mesh.0 = mesh_handle_for_options(view_options, loaded_mesh);
         *visibility = visibility_for(view_options.collision, loaded_mesh.is_collision);
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
             apply_material_options(
                 &mut material,
                 view_options,
-                &loaded_mesh,
+                loaded_mesh,
                 pending_texture_loads.texture_for(&material_handle.0),
             );
         }

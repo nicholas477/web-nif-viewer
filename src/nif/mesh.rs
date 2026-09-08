@@ -164,8 +164,8 @@ impl<'f, 'a, 'w, 's> NifMeshLoadParams<'f, 'a, 'w, 's> {
 
 /// Parses a NIF file, builds its inspector data, and replaces the rendered mesh entities.
 pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
-    let Ok(stream) = NiStream::from_bytes(&params.file) else {
-        return Err(format!("Could not parse the NIF file"));
+    let Ok(stream) = NiStream::from_bytes(params.file) else {
+        return Err("Could not parse the NIF file".to_string());
     };
 
     let object_indices = stream
@@ -463,7 +463,7 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
     }
 
     if shape_count == 0 {
-        return Err(format!("No renderable meshes were found in NIF file!"));
+        return Err("No renderable meshes were found in NIF file!".to_string());
     }
 
     bevy::log::info!("Spawned {shape_count} NiTriShape meshes from NIF file");
