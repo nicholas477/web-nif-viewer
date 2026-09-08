@@ -6,15 +6,12 @@
  */
 export function fetch_file_from_server(url: string): Promise<Uint8Array>;
 
-export function pick_directory(): Promise<void>;
-
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly fetch_file_from_server: (a: number, b: number) => any;
     readonly main: (a: number, b: number) => number;
-    readonly pick_directory: () => any;
     readonly rust_zstd_wasm_shim_calloc: (a: number, b: number) => number;
     readonly rust_zstd_wasm_shim_free: (a: number) => void;
     readonly rust_zstd_wasm_shim_malloc: (a: number) => number;
@@ -24,24 +21,23 @@ export interface InitOutput {
     readonly rust_zstd_wasm_shim_memset: (a: number, b: number, c: number) => number;
     readonly rust_zstd_wasm_shim_qsort: (a: number, b: number, c: number, d: number) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___bool__core_ed718c3d60ebd546___result__Result_____wasm_bindgen_527d7e65d48076c5___JsError___true_: (a: number, b: number, c: number) => [number, number];
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___js_sys_95306d5e22744ae6___Array__web_sys_79569bd6ceab953d___features__gen_ResizeObserver__ResizeObserver______true_: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___js_sys_95306d5e22744ae6___Function_fn_wasm_bindgen_527d7e65d48076c5___JsValue_____wasm_bindgen_527d7e65d48076c5___sys__Undefined___js_sys_95306d5e22744ae6___Function_fn_wasm_bindgen_527d7e65d48076c5___JsValue_____wasm_bindgen_527d7e65d48076c5___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___js_sys_87d72d324bb6c868___Array__web_sys_cf1446fc8b1731f6___features__gen_ResizeObserver__ResizeObserver______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___js_sys_87d72d324bb6c868___Function_fn_wasm_bindgen_527d7e65d48076c5___JsValue_____wasm_bindgen_527d7e65d48076c5___sys__Undefined___js_sys_87d72d324bb6c868___Function_fn_wasm_bindgen_527d7e65d48076c5___JsValue_____wasm_bindgen_527d7e65d48076c5___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue__core_ed718c3d60ebd546___result__Result_____wasm_bindgen_527d7e65d48076c5___JsError___true_: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_79569bd6ceab953d___features__gen_FileSystemDirectoryHandle__FileSystemDirectoryHandle__core_ed718c3d60ebd546___result__Result_____wasm_bindgen_527d7e65d48076c5___JsError___true_: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___core_ed718c3d60ebd546___option__Option_web_sys_79569bd6ceab953d___features__gen_Blob__Blob_______true_: (a: number, b: number, c: number) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___core_ed718c3d60ebd546___option__Option_web_sys_cf1446fc8b1731f6___features__gen_Blob__Blob_______true_: (a: number, b: number, c: number) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true_: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1_: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__10: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__11: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__13: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__14: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__15: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__16: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__17: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__19: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__8: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_79569bd6ceab953d___features__gen_InputEvent__InputEvent______true_: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_79569bd6ceab953d___features__gen_InputEvent__InputEvent______true__10: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_79569bd6ceab953d___features__gen_InputEvent__InputEvent______true__14: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_79569bd6ceab953d___features__gen_InputEvent__InputEvent______true__18: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___wasm_bindgen_527d7e65d48076c5___JsValue______true__1__7: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_cf1446fc8b1731f6___features__gen_InputEvent__InputEvent______true_: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_cf1446fc8b1731f6___features__gen_InputEvent__InputEvent______true__12: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_cf1446fc8b1731f6___features__gen_InputEvent__InputEvent______true__16: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke___web_sys_cf1446fc8b1731f6___features__gen_InputEvent__InputEvent______true__9: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_527d7e65d48076c5___convert__closures_____invoke_______true_: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
