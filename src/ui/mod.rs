@@ -1,6 +1,6 @@
 mod file;
 mod inspector;
-pub mod picking;
+pub mod mesh_selection;
 mod settings;
 mod top_panel;
 
