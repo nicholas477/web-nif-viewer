@@ -4,21 +4,19 @@ use bevy_egui::egui::{self, Ui};
 use tes3::nif::Inspect;
 
 /// Draws the file list and selectable NIF object hierarchy.
-pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::state::UIState) -> Option<String> {
-    ui.heading("Files");
-    ui.separator();
-
-    if file_names.is_empty() {
-        ui.label("No files loaded");
-        return None;
-    }
-
-    let mut sorted_file_names = file_names.to_vec();
-    sorted_file_names.sort_unstable();
+pub fn draw(
+    ui: &mut Ui,
+    loaded_file_names: &[String],
+    resource_paths: &[String],
+    resource_file_names: &[Vec<String>],
+    missing_paths: &[String],
+    state: &mut crate::state::UIState,
+) -> Option<String> {
     let mut clicked_file = None;
 
     let file_list_width = ui.available_width();
     let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
+
     egui::Resize::default()
         .id_salt("file_list_resize")
         .default_width(file_list_width)
@@ -33,16 +31,63 @@ pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::state::UIStat
                 .id_salt("file_list_scroll")
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    for file_name in sorted_file_names {
-                        let is_selected =
-                            state.archive.selected_file.as_deref() == Some(file_name.as_str());
-                        if ui.selectable_label(is_selected, &file_name).clicked() {
-                            state.archive.selected_file = Some(file_name.clone());
-                            clicked_file = Some(file_name);
-                        }
-                    }
-                });
+                    egui::CollapsingHeader::new("Loaded files")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            if loaded_file_names.is_empty() {
+                                ui.label("No archive or NIF loaded");
+                            } else {
+                                clicked_file = draw_file_list(ui, loaded_file_names, state);
+                            }
+                        });
+
+                    egui::CollapsingHeader::new("Resources")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            if resource_paths.is_empty() {
+                                ui.label("No resource folders configured");
+                            } else {
+                                for (index, path) in resource_paths.iter().enumerate() {
+                                    egui::CollapsingHeader::new(path)
+                                        .id_salt(("resource_files", index))
+                                        .show(ui, |ui| {
+                                            let files = resource_file_names
+                                                .get(index)
+                                                .map(Vec::as_slice)
+                                                .unwrap_or_default();
+                                            if files.is_empty() {
+                                                ui.label("No referenced files loaded");
+                                            } else {
+                                                draw_reference_list(
+                                                    ui,
+                                                    files,
+                                                    ("resource_file_list", index),
+                                                );
+                                            }
+                                        });
+                                }
+                            }
+                        });
+
+                    egui::CollapsingHeader::new("Missing references")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            if missing_paths.is_empty() {
+                                ui.label("No missing references");
+                            } else {
+                                for path in missing_paths {
+                                    ui.label(path);
+                                }
+                            }
+                        });
+                })
         });
+
+    if loaded_file_names.is_empty() {
+        return clicked_file;
+    }
+
+    ui.add_space(12.0);
 
     if !state.inspector.nif_objects.is_empty() {
         ui.add_space(12.0);
@@ -114,6 +159,62 @@ pub fn draw(ui: &mut Ui, file_names: &[String], state: &mut crate::state::UIStat
     clicked_file
 }
 
+fn draw_file_list(
+    ui: &mut Ui,
+    file_names: &[String],
+    state: &mut crate::state::UIState,
+) -> Option<String> {
+    let mut sorted_file_names = file_names.to_vec();
+    sorted_file_names.sort_unstable();
+    let mut clicked_file = None;
+    // let file_list_width = ui.available_width();
+    // let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
+
+    // egui::Resize::default()
+    //     .id_salt("file_list_resize")
+    //     .default_width(file_list_width)
+    //     .default_height(180.0)
+    //     .min_width(file_list_width)
+    //     .min_height(72.0)
+    //     .max_width(file_list_width)
+    //     .max_height(file_list_max_height)
+    //     .resizable([false, true])
+    //     .show(ui, |ui| {
+    //         egui::ScrollArea::vertical()
+    //             .id_salt("file_list_scroll")
+    //             .auto_shrink([false, false])
+    //             .show(ui, |ui| {
+    for file_name in sorted_file_names {
+        let is_selected = state.archive.selected_file.as_deref() == Some(file_name.as_str());
+        if ui.selectable_label(is_selected, &file_name).clicked() {
+            state.archive.selected_file = Some(file_name.clone());
+            clicked_file = Some(file_name);
+        }
+    }
+    //         });
+    // });
+
+    clicked_file
+}
+
+fn draw_reference_list(
+    ui: &mut Ui,
+    file_names: &[String],
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+) {
+    let mut sorted_file_names = file_names.to_vec();
+    sorted_file_names.sort_unstable();
+
+    egui::ScrollArea::vertical()
+        .id_salt(id_salt)
+        .max_height(180.0)
+        .show(ui, |ui| {
+            for file_name in sorted_file_names {
+                ui.label(file_name);
+            }
+        });
+}
+
 /// Draws details for the selected object below the NIF hierarchy.
 pub fn draw_node_panel(ui: &mut Ui, state: &crate::state::UIState) {
     ui.heading("Node");
@@ -146,7 +247,12 @@ pub fn draw_node_panel(ui: &mut Ui, state: &crate::state::UIState) {
                     let all_properties = object.object.properties();
 
                     for property in all_properties {
-                        let text = property.value.to_string().chars().take(50).collect::<String>();
+                        let text = property
+                            .value
+                            .to_string()
+                            .chars()
+                            .take(50)
+                            .collect::<String>();
                         ui.label(property.name);
                         ui.label(text);
                         ui.label(property.type_name);

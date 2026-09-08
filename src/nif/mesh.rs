@@ -38,6 +38,7 @@ struct TextureLoadResult {
 pub struct PendingTextureLoads {
     completed: Arc<Mutex<Vec<TextureLoadResult>>>,
     textures: Arc<Mutex<HashMap<AssetId<crate::PhongMaterial>, Handle<Image>>>>,
+    missing_paths: Arc<Mutex<HashSet<String>>>,
 }
 
 impl PendingTextureLoads {
@@ -73,6 +74,18 @@ impl PendingTextureLoads {
     pub fn texture_for(&self, material: &Handle<crate::PhongMaterial>) -> Option<Handle<Image>> {
         self.textures.lock().unwrap().get(&material.id()).cloned()
     }
+
+    /// Clears paths that were unresolved for the previously loaded NIF.
+    pub fn clear_missing_paths(&self) {
+        self.missing_paths.lock().unwrap().clear();
+    }
+
+    /// Returns texture references that were not found in the archive or resource folders.
+    pub fn missing_paths(&self) -> Vec<String> {
+        let mut paths = self.missing_paths.lock().unwrap().iter().cloned().collect::<Vec<_>>();
+        paths.sort_unstable();
+        paths
+    }
 }
 
 /// Decodes completed asynchronous texture reads and assigns them to their materials.
@@ -84,6 +97,7 @@ pub fn apply_completed_texture_loads(
     for result in pending.take_completed() {
         let Some(bytes) = result.bytes else {
             bevy::log::warn!("Texture not found in archive or resource folders: {}", result.path);
+            pending.missing_paths.lock().unwrap().insert(result.path);
             continue;
         };
         let extension = result.path.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();

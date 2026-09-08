@@ -83,6 +83,24 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
             .max_rect(ctx.viewport_rect()),
     );
     let file_names = params.fsstate.absolute_paths();
+    let loaded_file_names = params
+        .fsstate
+        .file_system
+        .read()
+        .unwrap()
+        .as_ref()
+        .map(|file_system| file_system.absolute_paths())
+        .unwrap_or_default();
+    let resource_paths = params.state.top_panel.resource_paths.clone();
+    let resource_file_names = params
+        .fsstate
+        .resource_file_systems
+        .read()
+        .unwrap()
+        .iter()
+        .map(|file_system| file_system.absolute_paths())
+        .collect::<Vec<_>>();
+    let missing_paths = params.pending_texture_loads.missing_paths();
 
     #[cfg(target_arch = "wasm32")]
     let uploaded_download_url = {
@@ -107,7 +125,14 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
         .resizable(true)
         .min_size(150.0)
         .show(&mut viewport_ui, |ui| {
-            inspector::draw(ui, &file_names, &mut params.state)
+            inspector::draw(
+                ui,
+                &loaded_file_names,
+                &resource_paths,
+                &resource_file_names,
+                &missing_paths,
+                &mut params.state,
+            )
         });
     let mut left = left_panel.response.rect.width();
 
@@ -168,6 +193,7 @@ fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
 /// Loads a NIF into Bevy assets, records failures, and frames the camera on success.
 fn load_nif(file_name: &str, params: &mut UiSystemParams) {
     bevy::log::info!("Loading NIF file: {file_name}");
+    params.pending_texture_loads.clear_missing_paths();
 
     let bytes = if let Some(fs) = params.fsstate.file_system.write().unwrap().deref_mut() {
         let bytes = bevy::tasks::futures_lite::future::block_on(

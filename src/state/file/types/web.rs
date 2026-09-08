@@ -1,5 +1,10 @@
 use arc_slice::ArcSlice;
-use std::{future::Future, pin::Pin};
+use std::{
+    collections::HashSet,
+    future::Future,
+    pin::Pin,
+    sync::RwLock,
+};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -13,12 +18,16 @@ use super::Filesystem;
 /// On wasm, it interacts with the browser's File System Access API to read files.
 pub struct RealFS {
     fs_handle: FileSystemDirectoryHandle,
+    resolved_paths: RwLock<HashSet<String>>,
 }
 
 impl RealFS {
     pub fn new(fs_handle: FileSystemDirectoryHandle) -> Self {
         bevy::log::info!("RealFS: registered browser resource folder");
-        Self { fs_handle }
+        Self {
+            fs_handle,
+            resolved_paths: RwLock::new(HashSet::new()),
+        }
     }
 }
 
@@ -87,6 +96,7 @@ impl Filesystem for RealFS {
                 Ok(buffer) => {
                     let bytes = js_sys::Uint8Array::new(&buffer).to_vec();
                     bevy::log::info!("RealFS: read {} bytes from {path}", bytes.len());
+                    self.resolved_paths.write().unwrap().insert(path.to_string());
                     Some(ArcSlice::from(bytes.as_slice()))
                 }
                 Err(error) => {
@@ -98,6 +108,6 @@ impl Filesystem for RealFS {
     }
 
     fn absolute_paths(&self) -> Vec<String> {
-        Vec::new()
+        self.resolved_paths.read().unwrap().iter().cloned().collect()
     }
 }
