@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use bevy::prelude::*;
+use bevy_egui::egui;
 use wasm_bindgen::{JsCast, prelude::*};
 
 static RESOURCE_PERMISSIONS_READY: AtomicBool = AtomicBool::new(false);
@@ -98,7 +99,9 @@ pub fn initialize_resources(
         bevy::log::info!("Saved resource folders require permission: {needs_permission}");
         RESOURCE_PERMISSIONS_READY.store(true, Ordering::Release);
         SHOW_PERMISSION_PROMPT.store(needs_permission, Ordering::Release);
-        bevy::log::info!("Restored resource folders from IndexedDB; permission may require user action");
+        bevy::log::info!(
+            "Restored resource folders from IndexedDB; permission may require user action"
+        );
     });
 }
 
@@ -144,25 +147,23 @@ fn refresh_resources(state: &mut crate::UIState, fsstate: &mut crate::state::FSS
     }
     state.archive.pending_file = state.archive.selected_file.clone();
     bevy::log::info!("Resource folders changed; reloading textures for the active NIF");
-
-    // fsstate.set_resource_file_systems(
-    //     paths
-    //         .into_iter()
-    //         .map(|handle| Box::new(crate::state::file::RealFS::new(handle)) as Box<_>)
-    //         .collect(),
-    // );
 }
 
 pub fn draw_resources(ctx: &bevy_egui::egui::Context, params: &mut crate::ui::UiSystemParams) {
     refresh_resources(&mut params.state, &mut params.fsstate);
     if take_resource_filesystem_update() {
         params.state.archive.pending_file = params.state.archive.selected_file.clone();
-        bevy::log::info!("Resource folder permissions changed; reloading textures for the active NIF");
+        bevy::log::info!(
+            "Resource folder permissions changed; reloading textures for the active NIF"
+        );
     }
     if SHOW_PERMISSION_PROMPT.swap(false, Ordering::AcqRel) {
         params.state.top_panel.show_resource_permission_prompt = true;
     }
-    draw_startup_permission_prompt(ctx, &mut params.state.top_panel.show_resource_permission_prompt);
+    draw_startup_permission_prompt(
+        ctx,
+        &mut params.state.top_panel.show_resource_permission_prompt,
+    );
     if !params.state.top_panel.show_resources {
         return;
     }
@@ -173,19 +174,35 @@ pub fn draw_resources(ctx: &bevy_egui::egui::Context, params: &mut crate::ui::Ui
     bevy_egui::egui::Window::new("Resources")
         .open(&mut open)
         .default_width(520.0)
+        .default_height(400.0)
+        .collapsible(false)
+        .resizable(true)
         .show(ctx, |ui| {
             ui.label(
                 "Resource folders are searched in this order when an archive references a texture.",
             );
             ui.separator();
-            for (index, path) in paths.iter().enumerate() {
-                if ui.selectable_label(selected == Some(index), path).clicked() {
-                    selected = Some(index);
-                }
+
+            if !paths.is_empty() {
+                egui::ScrollArea::vertical().auto_shrink([false, false]).max_height(300.0).show(ui, |ui| {
+                    for (index, path) in paths.iter().enumerate() {
+                        if ui
+                            .selectable_label(
+                                selected == Some(index),
+                                format!("{} - {path}", index + 1).to_string(),
+                            )
+                            .clicked()
+                        {
+                            selected = Some(index);
+                        }
+                    }
+                });
             }
-            if paths.is_empty() {
+            else
+            {
                 ui.label("No resource folders configured.");
             }
+
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Add folder").clicked() {
@@ -242,7 +259,10 @@ fn draw_startup_permission_prompt(ctx: &bevy_egui::egui::Context, open: &mut boo
     bevy_egui::egui::Window::new("Resource Folder Access")
         .collapsible(false)
         .resizable(false)
-        .anchor(bevy_egui::egui::Align2::CENTER_CENTER, bevy_egui::egui::Vec2::ZERO)
+        .anchor(
+            bevy_egui::egui::Align2::CENTER_CENTER,
+            bevy_egui::egui::Vec2::ZERO,
+        )
         .open(open)
         .show(ctx, |ui| {
             ui.label("Allow access to saved resource folders so their textures can be loaded.");
