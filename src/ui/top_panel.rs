@@ -1,19 +1,43 @@
 use crate::ui::{UiSystemParams, file};
 use bevy::prelude::*;
 use bevy_egui::egui::{self, InnerResponse, Ui};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
-fn load_file(file: Box<dyn crate::ui::file::PickerFile>) {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use wasm_bindgen_futures::spawn_local;
+/// Reads a selected NIF or ZIP file and makes its contents available to the viewer.
+async fn load_file(
+    file: Box<dyn crate::ui::file::PickerFile>,
+    file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
+    load_status: crate::state::file::ArchiveLoadStatus,
+) {
+    let file_name = crate::state::file::normalize_path(&file.name());
+    let mime_type = file.mime_type();
+    let Some(bytes) = file.read().await else {
+        load_status.write().unwrap().error = Some(format!("Could not read {file_name}"));
+        return;
+    };
 
-        spawn_local(async move {
-            let bytes = file.read().await;
-            if let Some(bytes) = bytes {
-                bevy::log::info!("Read {} bytes from file: {:#?}", bytes.len(), file);
+    let files = if file_name.ends_with(".zip") || mime_type == "application/zip" {
+        match crate::state::file::unzip(bytes, &load_status) {
+            Ok(files) => files,
+            Err(error) => {
+                let mut status = load_status.write().unwrap();
+                status.phase = None;
+                status.error = Some(format!("Could not open {file_name}: {error}"));
+                return;
             }
-        });
-    }
+        }
+    } else {
+        HashMap::from([(file_name, bytes)])
+    };
+
+    *file_system.write().unwrap() = Some(Box::new(crate::state::file::HashmapFS::new_from_vec(
+        String::new(),
+        files,
+    )));
+    load_status.write().unwrap().error = None;
 }
 
 pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResponse<()> {
@@ -22,25 +46,30 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
         .show(viewport_ui, |ui| {
             ui.horizontal(|ui| {
                 ui.menu_button("File", |ui| {
-                    #[cfg(target_arch = "wasm32")]
                     if ui.button("Open File").clicked() {
+                        let file_system = params.fsstate.file_system.clone();
+                        let load_status = params.state.archive.archive_load_status.clone();
+
+                        #[cfg(target_arch = "wasm32")]
+                        {
                         use wasm_bindgen_futures::spawn_local;
 
                         spawn_local(async move {
                             if let Some(file) =
                                 file::pick_single_file(".nif,.zip,application/zip").await
                             {
-                                bevy::log::info!("Selected file: {:#?}", file);
-                                bevy::log::info!("Selected file mime type: {}", file.mime_type());
-                                load_file(file);
+                                    load_file(file, file_system, load_status).await;
                             }
                         });
-                        ui.close();
-                    }
+                        }
 
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Open File").clicked() {
-                        file::open_archive_picker(&mut params.state, &mut params.fsstate);
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let Some(file) = futures::executor::block_on(
+                            file::pick_single_file(".nif,.zip,application/zip"),
+                        ) {
+                            futures::executor::block_on(load_file(file, file_system, load_status));
+                        }
+
                         ui.close();
                     }
 
