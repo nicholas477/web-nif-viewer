@@ -128,7 +128,8 @@ pub fn draw_recent_menu(
 
         for recent in recent_files.files {
             let file_name = recent.file_name;
-            let zip_url = recent.zip_url;
+            let zip_url = recent.path;
+            let source = recent.source;
             let file_name_response =
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                     ui.add_sized(
@@ -142,7 +143,7 @@ pub fn draw_recent_menu(
             // TODO: Add in a copy url feature?
             let _url_button = ui.add(
                 egui::Label::new(
-                    egui::RichText::new(&zip_url)
+                    egui::RichText::new(format!("{}: {zip_url}", source.label()))
                         .size(11.0)
                         .color(ui.visuals().weak_text_color()),
                 )
@@ -152,7 +153,7 @@ pub fn draw_recent_menu(
             ui.add_space(4.0);
 
             if file_name_response.inner.clicked() {
-                start_archive_load(state, fsstate, zip_url, Some(file_name));
+                start_archive_load(state, fsstate, zip_url, Some(file_name), source);
                 ui.close();
             }
         }

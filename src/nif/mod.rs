@@ -128,6 +128,9 @@ pub fn diffuse_texture_path(stream: &NiStream, shape: &NiTriShape) -> Option<Str
     let texture = stream.get(texture_link)?;
 
     match &texture.source {
+        TextureSource::External(path) if !path.contains(['/', '\\']) => {
+            Some(format!("textures\\{path}"))
+        }
         TextureSource::External(path) => Some(path.clone()),
         TextureSource::Internal(_) => None,
     }

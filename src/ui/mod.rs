@@ -114,7 +114,13 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
     };
     #[cfg(target_arch = "wasm32")]
     if let Some(download_url) = uploaded_download_url {
-        file::start_archive_load(&mut params.state, &mut params.fsstate, download_url, None);
+        file::start_archive_load(
+            &mut params.state,
+            &mut params.fsstate,
+            download_url,
+            None,
+            crate::RecentFileSource::Url,
+        );
     }
 
     let left_panel = egui::Panel::left("left_panel")
@@ -137,11 +143,14 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
         && file_name.to_lowercase().ends_with(".nif")
     {
         #[cfg(target_arch = "wasm32")]
-        crate::state::query::update_query(&crate::state::query::QueryState {
-            zip_url: params.state.archive.zip_url_input.clone(),
-            selected_file: file_name.clone(),
-            view_state: params.state.view.clone(),
-        });
+            if params.state.archive.recent_source == crate::RecentFileSource::Url {
+                crate::state::query::update_query(&crate::state::query::QueryState {
+                    path: params.state.archive.zip_url_input.clone(),
+                    selected_file: file_name.clone(),
+                    source: params.state.archive.recent_source,
+                    view_state: params.state.view.clone(),
+                });
+            }
 
         load_nif(&file_name, &mut params);
     }
@@ -159,9 +168,48 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
         .write()
         .unwrap()
         .take();
+    let picked_source = params
+        .state
+        .archive
+        .pending_picker_source
+        .write()
+        .unwrap()
+        .take();
+    let picked_recent_source = params
+        .state
+        .archive
+        .pending_picker_recent_source
+        .write()
+        .unwrap()
+        .take();
+    let has_picked_source = picked_source.is_some();
+    if let Some(source) = picked_source {
+        params.state.archive.zip_url_input = source;
+    }
+    if let Some(source) = picked_recent_source {
+        params.state.archive.recent_source = source;
+    }
     if let Some(file_name) = picked_file {
         params.state.archive.selected_file = Some(file_name.clone());
         params.state.archive.pending_file = Some(file_name);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    if params.state.archive.recent_source == crate::RecentFileSource::Disk
+        && has_picked_source
+    {
+        crate::state::query::update_query(&crate::state::query::QueryState {
+            path: params.state.archive.zip_url_input.clone(),
+            selected_file: params
+                .state
+                .archive
+                .pending_file
+                .as_deref()
+                .unwrap_or_default()
+                .to_string(),
+            source: crate::RecentFileSource::Disk,
+            view_state: params.state.view.clone(),
+        });
     }
 
     load_pending_nif(&mut params);
@@ -238,6 +286,7 @@ pub(crate) fn load_nif(file_name: &str, params: &mut UiSystemParams) {
         )) {
             Ok(()) => {
                 crate::state::recent_files::record_recent_file(
+                    params.state.archive.recent_source,
                     &params.state.archive.zip_url_input,
                     file_name,
                 );

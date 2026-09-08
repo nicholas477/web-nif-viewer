@@ -12,17 +12,21 @@ pub fn initialize_default_mesh(
 ) {
     let query_state =
         crate::state::query::query_state().unwrap_or_else(|| crate::state::query::QueryState {
-            zip_url: super::DEFAULT_MESH.0.to_string(),
+            path: super::DEFAULT_MESH.0.to_string(),
             selected_file: super::DEFAULT_MESH.1.to_string(),
+            source: crate::RecentFileSource::Url,
             view_state: state.view.clone(),
         });
 
-    state.archive.zip_url_input = query_state.zip_url.clone();
+    state.archive.zip_url_input = query_state.path.clone();
+    state.archive.recent_source = query_state.source;
     state.archive.pending_file = Some(query_state.selected_file);
-    fetch_archive(
-        query_state.zip_url,
-        fsstate.file_system.clone(),
-        state.archive.archive_load_status.clone(),
+    start_archive_load(
+        state.into_inner(),
+        fsstate.into_inner(),
+        query_state.path,
+        None,
+        query_state.source,
     );
 }
 
@@ -93,16 +97,40 @@ pub fn start_archive_load(
     fsstate: &mut crate::state::FSState,
     zip_url: String,
     pending_file: Option<String>,
+    source: crate::RecentFileSource,
 ) {
+    if source == crate::RecentFileSource::Disk {
+        let file_system = fsstate.file_system.clone();
+        let pending_picker_file = state.archive.pending_picker_file.clone();
+        let pending_picker_source = state.archive.pending_picker_source.clone();
+        let pending_picker_recent_source = state.archive.pending_picker_recent_source.clone();
+        let load_status = state.archive.archive_load_status.clone();
+        spawn_local(async move {
+            if let Some(file) = crate::ui::file::open_recent_file(&zip_url).await {
+                crate::ui::top_panel::load_file(
+                    file,
+                    file_system,
+                    pending_picker_file,
+                    pending_picker_source,
+                    pending_picker_recent_source,
+                    load_status,
+                )
+                .await;
+            }
+        });
+        return;
+    }
     crate::state::query::update_query(&query::QueryState {
-        zip_url: zip_url.clone(),
+        path: zip_url.clone(),
         selected_file: pending_file
             .as_deref()
             .map(|s| s.into())
             .unwrap_or_default(),
+        source,
         view_state: state.view.clone(),
     });
     state.archive.zip_url_input = zip_url.clone();
+    state.archive.recent_source = crate::RecentFileSource::Url;
     state.archive.selected_file = None;
     state.archive.pending_file = pending_file;
     fsstate.file_system.write().unwrap().take();

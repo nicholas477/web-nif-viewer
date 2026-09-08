@@ -7,13 +7,16 @@ use std::{
 };
 
 /// Reads a selected NIF or ZIP file and makes its contents available to the viewer.
-async fn load_file(
+pub(crate) async fn load_file(
     file: Box<dyn crate::ui::file::PickerFile>,
     file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
     pending_picker_file: Arc<RwLock<Option<String>>>,
+    pending_picker_source: Arc<RwLock<Option<String>>>,
+    pending_picker_recent_source: Arc<RwLock<Option<crate::RecentFileSource>>>,
     load_status: crate::state::file::ArchiveLoadStatus,
 ) {
     let file_name = crate::state::file::normalize_path(&file.name());
+    let source = file.source();
     let mime_type = file.mime_type();
     let Some(bytes) = file.read().await else {
         load_status.write().unwrap().error = Some(format!("Could not read {file_name}"));
@@ -40,6 +43,8 @@ async fn load_file(
         files,
     )));
     load_status.write().unwrap().error = None;
+    *pending_picker_source.write().unwrap() = source;
+    *pending_picker_recent_source.write().unwrap() = Some(crate::RecentFileSource::Disk);
     if is_nif {
         *pending_picker_file.write().unwrap() = Some(file_name);
     }
@@ -54,29 +59,47 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                     if ui.button("Open File").clicked() {
                         let file_system = params.fsstate.file_system.clone();
                         let pending_picker_file = params.state.archive.pending_picker_file.clone();
+                        let pending_picker_source =
+                            params.state.archive.pending_picker_source.clone();
+                        let pending_picker_recent_source = params
+                            .state
+                            .archive
+                            .pending_picker_recent_source
+                            .clone();
                         let load_status = params.state.archive.archive_load_status.clone();
 
                         #[cfg(target_arch = "wasm32")]
                         {
-                        use wasm_bindgen_futures::spawn_local;
+                            use wasm_bindgen_futures::spawn_local;
 
-                        spawn_local(async move {
-                            if let Some(file) =
-                                file::pick_single_file(".nif,.zip,application/zip").await
-                            {
-                                    load_file(file, file_system, pending_picker_file, load_status).await;
-                            }
-                        });
+                            spawn_local(async move {
+                                if let Some(file) =
+                                    file::pick_single_file(".nif,.zip,application/zip").await
+                                {
+                                    load_file(
+                                        file,
+                                        file_system,
+                                        pending_picker_file,
+                                        pending_picker_source,
+                                        pending_picker_recent_source,
+                                        load_status,
+                                    )
+                                    .await;
+                                }
+                            });
                         }
 
                         #[cfg(not(target_arch = "wasm32"))]
-                        if let Some(file) = futures::executor::block_on(
-                            file::pick_single_file(".nif,.zip,application/zip"),
-                        ) {
+                        if let Some(file) = futures::executor::block_on(file::pick_single_file(
+                            ".nif,.zip,application/zip",
+                        )) {
+                            params.state.archive.recent_source = crate::RecentFileSource::Disk;
                             futures::executor::block_on(load_file(
                                 file,
                                 file_system,
                                 pending_picker_file,
+                                pending_picker_source,
+                                pending_picker_recent_source,
                                 load_status,
                             ));
                         }
@@ -167,17 +190,20 @@ fn draw_view_controls(ui: &mut Ui, params: &mut UiSystemParams) {
             );
 
             #[cfg(target_arch = "wasm32")]
-            crate::state::query::update_query(&crate::state::query::QueryState {
-                zip_url: params.state.archive.zip_url_input.clone(),
-                selected_file: params
-                    .state
-                    .archive
-                    .selected_file
-                    .as_deref()
-                    .map(|s| s.into())
-                    .unwrap_or_default(),
-                view_state: params.state.view.clone(),
-            });
+            if params.state.archive.recent_source == crate::RecentFileSource::Url {
+                crate::state::query::update_query(&crate::state::query::QueryState {
+                    path: params.state.archive.zip_url_input.clone(),
+                    selected_file: params
+                        .state
+                        .archive
+                        .selected_file
+                        .as_deref()
+                        .map(|s| s.into())
+                        .unwrap_or_default(),
+                    source: params.state.archive.recent_source,
+                    view_state: params.state.view.clone(),
+                });
+            }
         }
     });
 }

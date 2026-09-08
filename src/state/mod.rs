@@ -27,10 +27,30 @@ pub struct UploadStatus {
     pub download_url: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum RecentFileSource {
+    Disk,
+    #[default]
+    Url,
+}
+
+impl RecentFileSource {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Disk => "File",
+            Self::Url => "URL",
+        }
+    }
+}
+
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 pub struct RecentFile {
-    pub zip_url: String,
+    pub path: String,
+
+    /// File name inside the path, if the path is a zip
     pub file_name: String,
+    #[serde(default)]
+    pub source: RecentFileSource,
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
@@ -97,9 +117,12 @@ pub struct NifObjectInfo {
 pub struct ArchiveState {
     pub show_zip_popup: bool,
     pub zip_url_input: String,
+    pub recent_source: RecentFileSource,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
     pub pending_picker_file: Arc<RwLock<Option<String>>>,
+    pub pending_picker_source: Arc<RwLock<Option<String>>>,
+    pub pending_picker_recent_source: Arc<RwLock<Option<RecentFileSource>>>,
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
     pub nif_load_error: Option<String>,
     pub upload_status: Arc<RwLock<UploadStatus>>,

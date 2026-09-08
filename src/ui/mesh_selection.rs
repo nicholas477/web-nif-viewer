@@ -68,8 +68,10 @@ fn set_wireframe_highlight(
             };
         }
         let is_selected = Some(wireframe.nif_node_index) == selected_node;
-        let is_hidden_by_collision_filter = params.state.view.collision == crate::DisplayMode::Only
-            && !wireframe.is_collision;
+        let is_hidden_by_collision_filter = matches!(
+            (params.state.view.collision, wireframe.is_collision),
+            (crate::DisplayMode::Off, true) | (crate::DisplayMode::Only, false)
+        );
         *visibility = if is_hidden_by_collision_filter {
             bevy::camera::visibility::Visibility::Hidden
         } else if is_selected || params.state.view.wireframe {

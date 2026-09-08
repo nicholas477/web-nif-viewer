@@ -3,12 +3,16 @@ use wasm_bindgen::JsValue;
 /// Represents the state of the query parameters in the browser URL.
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct QueryState {
-    pub zip_url: String,
+    pub path: String,
     pub selected_file: String,
+    #[serde(default)]
+    pub source: crate::RecentFileSource,
     #[serde(with = "view_state_bytes")]
     pub view_state: crate::state::ViewState,
 }
 
+
+/// The url encoder doesnt support nested structs, so we just serialize the view state as bytes.
 mod view_state_bytes {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde::{Deserialize, Deserializer, Serializer};

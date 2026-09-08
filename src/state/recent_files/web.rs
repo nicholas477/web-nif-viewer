@@ -34,10 +34,22 @@ pub fn recent_files() -> crate::RecentFiles {
         files: value
             .lines()
             .filter_map(|entry| {
-                let (zip_url, file_name) = entry.split_once('\t')?;
+                let (source, zip_url, file_name) = match entry.splitn(3, '\t').collect::<Vec<_>>().as_slice() {
+                    [source, zip_url, file_name] => (
+                        match *source {
+                            "disk" => crate::RecentFileSource::Disk,
+                            _ => crate::RecentFileSource::Url,
+                        },
+                        *zip_url,
+                        *file_name,
+                    ),
+                    [zip_url, file_name] => (crate::RecentFileSource::Url, *zip_url, *file_name),
+                    _ => return None,
+                };
                 (!zip_url.is_empty() && !file_name.is_empty()).then(|| crate::RecentFile {
-                    zip_url: zip_url.to_string(),
+                    path: zip_url.to_string(),
                     file_name: file_name.to_string(),
+                    source,
                 })
             })
             .collect(),
@@ -45,7 +57,11 @@ pub fn recent_files() -> crate::RecentFiles {
 }
 
 /// Stores a successful archive/file selection at the front of the recent-files cookie.
-pub fn record_recent_file(zip_url: &str, file_name: &str) {
+pub fn record_recent_file(
+    source: crate::RecentFileSource,
+    zip_url: &str,
+    file_name: &str,
+) {
     if zip_url.is_empty() {
         return;
     }
@@ -56,21 +72,32 @@ pub fn record_recent_file(zip_url: &str, file_name: &str) {
         return;
     };
 
+    let recent_file = crate::RecentFile {
+        path: zip_url.to_string(),
+        file_name: file_name.to_string(),
+        source,
+    };
+
+    bevy::log::info!("Recording recent file: {recent_file:?}");
+
     let mut files = recent_files();
-    files.files.retain(|recent| recent.zip_url != zip_url);
+    files.files.retain(|recent| recent.path != zip_url);
     files.files.insert(
         0,
-        crate::RecentFile {
-            zip_url: zip_url.to_string(),
-            file_name: file_name.to_string(),
-        },
+        recent_file,
     );
     files.files.truncate(super::MAX_RECENT_FILES);
 
     let value = files
         .files
         .iter()
-        .map(|recent| format!("{}\t{}", recent.zip_url, recent.file_name))
+        .map(|recent| {
+            let source = match recent.source {
+                crate::RecentFileSource::Disk => "disk",
+                crate::RecentFileSource::Url => "url",
+            };
+            format!("{source}\t{}\t{}", recent.path, recent.file_name)
+        })
         .collect::<Vec<_>>()
         .join("\n");
     let encoded_value = js_sys::encode_uri_component(&value);

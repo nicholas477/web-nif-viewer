@@ -13,14 +13,22 @@ fn recent_files_path() -> Option<std::path::PathBuf> {
 }
 
 /// Records a recent archive/file pair in the local configuration.
-pub fn record_recent_file(archive_path: &str, file_name: &str) {
+pub fn record_recent_file(
+    source: crate::RecentFileSource,
+    archive_path: &str,
+    file_name: &str,
+) {
+    if archive_path.is_empty() {
+        return;
+    }
     let mut recent_files = recent_files();
-    recent_files.files.retain(|recent| recent.zip_url != archive_path);
+    recent_files.files.retain(|recent| recent.path != archive_path);
     recent_files.files.insert(
         0,
         crate::RecentFile {
-            zip_url: archive_path.to_string(),
+            path: archive_path.to_string(),
             file_name: file_name.to_string(),
+            source,
         },
     );
     recent_files.files.truncate(super::MAX_RECENT_FILES);
