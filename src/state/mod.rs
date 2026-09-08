@@ -99,6 +99,7 @@ pub struct ArchiveState {
     pub zip_url_input: String,
     pub selected_file: Option<String>,
     pub pending_file: Option<String>,
+    pub pending_picker_file: Arc<RwLock<Option<String>>>,
     pub archive_load_status: Arc<RwLock<ArchiveLoadStatus>>,
     pub nif_load_error: Option<String>,
     pub upload_status: Arc<RwLock<UploadStatus>>,

@@ -10,6 +10,7 @@ use std::{
 async fn load_file(
     file: Box<dyn crate::ui::file::PickerFile>,
     file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
+    pending_picker_file: Arc<RwLock<Option<String>>>,
     load_status: crate::state::file::ArchiveLoadStatus,
 ) {
     let file_name = crate::state::file::normalize_path(&file.name());
@@ -19,6 +20,7 @@ async fn load_file(
         return;
     };
 
+    let is_nif = file_name.ends_with(".nif");
     let files = if file_name.ends_with(".zip") || mime_type == "application/zip" {
         match crate::state::file::unzip(bytes, &load_status) {
             Ok(files) => files,
@@ -30,7 +32,7 @@ async fn load_file(
             }
         }
     } else {
-        HashMap::from([(file_name, bytes)])
+        HashMap::from([(file_name.clone(), bytes)])
     };
 
     *file_system.write().unwrap() = Some(Box::new(crate::state::file::HashmapFS::new_from_vec(
@@ -38,6 +40,9 @@ async fn load_file(
         files,
     )));
     load_status.write().unwrap().error = None;
+    if is_nif {
+        *pending_picker_file.write().unwrap() = Some(file_name);
+    }
 }
 
 pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResponse<()> {
@@ -48,6 +53,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                 ui.menu_button("File", |ui| {
                     if ui.button("Open File").clicked() {
                         let file_system = params.fsstate.file_system.clone();
+                        let pending_picker_file = params.state.archive.pending_picker_file.clone();
                         let load_status = params.state.archive.archive_load_status.clone();
 
                         #[cfg(target_arch = "wasm32")]
@@ -58,7 +64,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                             if let Some(file) =
                                 file::pick_single_file(".nif,.zip,application/zip").await
                             {
-                                    load_file(file, file_system, load_status).await;
+                                    load_file(file, file_system, pending_picker_file, load_status).await;
                             }
                         });
                         }
@@ -67,7 +73,12 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                         if let Some(file) = futures::executor::block_on(
                             file::pick_single_file(".nif,.zip,application/zip"),
                         ) {
-                            futures::executor::block_on(load_file(file, file_system, load_status));
+                            futures::executor::block_on(load_file(
+                                file,
+                                file_system,
+                                pending_picker_file,
+                                load_status,
+                            ));
                         }
 
                         ui.close();

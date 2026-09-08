@@ -82,7 +82,6 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
             .layer_id(LayerId::background())
             .max_rect(ctx.viewport_rect()),
     );
-    let file_names = params.fsstate.absolute_paths();
     let loaded_file_names = params
         .fsstate
         .file_system
@@ -117,8 +116,6 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
     if let Some(download_url) = uploaded_download_url {
         file::start_archive_load(&mut params.state, &mut params.fsstate, download_url, None);
     }
-
-    load_pending_nif(&file_names, &mut params);
 
     let left_panel = egui::Panel::left("left_panel")
         .default_size(400.0)
@@ -155,6 +152,20 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
         .rect
         .height();
 
+    let picked_file = params
+        .state
+        .archive
+        .pending_picker_file
+        .write()
+        .unwrap()
+        .take();
+    if let Some(file_name) = picked_file {
+        params.state.archive.selected_file = Some(file_name.clone());
+        params.state.archive.pending_file = Some(file_name);
+    }
+
+    load_pending_nif(&mut params);
+
     left *= params.window.scale_factor();
     let top = top * params.window.scale_factor();
     let position = UVec2::new(left as u32, top as u32);
@@ -178,10 +189,11 @@ pub fn ui_system(mut params: UiSystemParams) -> Result {
 }
 
 /// Loads a requested NIF once its containing archive has made the file available.
-fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
+fn load_pending_nif(params: &mut UiSystemParams) {
     let Some(file_name) = params.state.archive.pending_file.clone() else {
         return;
     };
+    let file_names = params.fsstate.absolute_paths();
     if !file_names.contains(&file_name) || !file_name.to_lowercase().ends_with(".nif") {
         return;
     }
@@ -191,7 +203,7 @@ fn load_pending_nif(file_names: &[String], params: &mut UiSystemParams) {
 }
 
 /// Loads a NIF into Bevy assets, records failures, and frames the camera on success.
-fn load_nif(file_name: &str, params: &mut UiSystemParams) {
+pub(crate) fn load_nif(file_name: &str, params: &mut UiSystemParams) {
     bevy::log::info!("Loading NIF file: {file_name}");
     params.pending_texture_loads.clear_missing_paths();
     for resource_file_system in params.fsstate.resource_file_systems.read().unwrap().iter() {

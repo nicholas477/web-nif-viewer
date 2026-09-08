@@ -67,15 +67,15 @@ fn set_wireframe_highlight(
                 LinearRgba::BLACK
             };
         }
-        if Some(wireframe.nif_node_index) == selected_node {
-            *visibility = bevy::camera::visibility::Visibility::Visible;
-        }
-        else {
-            *visibility = if params.state.view.wireframe {
-                bevy::camera::visibility::Visibility::Visible
-            } else {
-                bevy::camera::visibility::Visibility::Hidden
-            };
-        }
+        let is_selected = Some(wireframe.nif_node_index) == selected_node;
+        let is_hidden_by_collision_filter = params.state.view.collision == crate::DisplayMode::Only
+            && !wireframe.is_collision;
+        *visibility = if is_hidden_by_collision_filter {
+            bevy::camera::visibility::Visibility::Hidden
+        } else if is_selected || params.state.view.wireframe {
+            bevy::camera::visibility::Visibility::Visible
+        } else {
+            bevy::camera::visibility::Visibility::Hidden
+        };
     }
 }
