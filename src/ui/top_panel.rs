@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-/// Reads a selected NIF or ZIP file and makes its contents available to the viewer.
+/// Reads a selected NIF or supported archive file and makes its contents available to the viewer.
 pub(crate) async fn load_file(
     file: Box<dyn crate::ui::file::PickerFile>,
     file_system: Arc<RwLock<Option<Box<dyn crate::state::file::Filesystem>>>>,
@@ -25,6 +25,7 @@ pub(crate) async fn load_file(
 
     let is_nif = file_name.ends_with(".nif");
     let files = if file_name.ends_with(".zip")
+        || file_name.ends_with(".7z")
         || file_name.ends_with(".bsa")
         || mime_type == "application/zip"
     {
@@ -77,7 +78,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
 
                             spawn_local(async move {
                                 if let Some(file) =
-                                    file::pick_single_file(".nif,.zip,.bsa,application/zip").await
+                                    file::pick_single_file(".nif,.zip,.7z,.bsa,application/zip").await
                                 {
                                     load_file(
                                         file,
@@ -94,7 +95,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
 
                         #[cfg(not(target_arch = "wasm32"))]
                         if let Some(file) = futures::executor::block_on(file::pick_single_file(
-                            ".nif,.zip,.bsa,application/zip",
+                            ".nif,.zip,.7z,.bsa,application/zip",
                         )) {
                             params.state.archive.recent_source = crate::RecentFileSource::Disk;
                             futures::executor::block_on(load_file(

@@ -37,6 +37,7 @@ tes3 = { git = "https://github.com/nicholas477/tes3.git", features = [
     "inspect",
 ] }
 zip = "8.6.0"
+sevenz-rust2 = "0.22.2"
 toml = "1.1.5"
 serde_toml = "0.0.1"
 slotmap = "1.1.1"

@@ -23,6 +23,7 @@ use std::{
     pin::Pin,
     sync::{Arc, RwLock},
 };
+use sevenz_rust2::{ArchiveReader, Password};
 use zip::ZipArchive;
 
 pub type ReadResult<'a> = Pin<Box<dyn Future<Output = Option<ArcSlice<[u8]>>> + 'a>>;
@@ -67,6 +68,7 @@ pub enum FileError {
     #[cfg(target_arch = "wasm32")]
     FetchError(String),
     UnzipError(String),
+    SevenZipError(String),
     BsaError(String),
     IoError(io::Error),
 }
@@ -78,6 +80,7 @@ impl fmt::Display for FileError {
             #[cfg(target_arch = "wasm32")]
             FileError::FetchError(message) => write!(f, "Fetch Error: {message}"),
             FileError::UnzipError(msg) => write!(f, "Unzip Error: {}", msg),
+            FileError::SevenZipError(msg) => write!(f, "7-Zip Error: {msg}"),
             FileError::BsaError(msg) => write!(f, "BSA Error: {msg}"),
             FileError::IoError(err) => write!(f, "IO Error: {}", err),
         }
@@ -94,7 +97,7 @@ impl std::error::Error for FileError {
     }
 }
 
-/// Extracts and normalizes every file in a ZIP or BSA archive.
+/// Extracts and normalizes every file in a supported archive.
 pub fn extract_archive(
     archive_bytes: Vec<u8>,
     status: &ArchiveLoadStatus,
@@ -102,7 +105,37 @@ pub fn extract_archive(
     if archive_bytes.starts_with(&0x0000_0100_u32.to_le_bytes()) {
         return extract_bsa(archive_bytes, status);
     }
+    if archive_bytes.starts_with(b"7z\xBC\xAF\x27\x1C") {
+        return extract_7z(archive_bytes, status);
+    }
     unzip(archive_bytes, status)
+}
+
+/// Extracts and normalizes every file in a 7-Zip archive.
+fn extract_7z(
+    archive_bytes: Vec<u8>,
+    status: &ArchiveLoadStatus,
+) -> Result<HashMap<String, Vec<u8>>, FileError> {
+    status.write().unwrap().phase = Some("Opening 7-Zip archive...".to_string());
+    let mut archive = ArchiveReader::new(Cursor::new(archive_bytes), Password::empty())
+        .map_err(|error| FileError::SevenZipError(error.to_string()))?;
+    let mut file_system = HashMap::new();
+
+    archive
+        .for_each_entries(|entry, reader| {
+            if entry.is_directory {
+                return Ok(true);
+            }
+
+            let mut contents = Vec::new();
+            reader.read_to_end(&mut contents)?;
+            file_system.insert(normalize_path(&entry.name), contents);
+            Ok(true)
+        })
+        .map_err(|error| FileError::SevenZipError(error.to_string()))?;
+
+    status.write().unwrap().phase = None;
+    Ok(file_system)
 }
 
 /// Extracts and normalizes every file in a ZIP archive.

@@ -16,10 +16,11 @@ pub fn initialize_default_mesh(mut state: ResMut<crate::UIState>, fsstate: ResMu
     );
 }
 
-/// Opens the native ZIP picker and loads the selected archive into the viewer.
+/// Opens the native archive picker and loads the selected archive into the viewer.
 pub fn open_archive_picker(state: &mut crate::UIState, fsstate: &mut crate::state::FSState) {
     let Some(path) = FileDialog::new()
         .add_filter("ZIP archive", &["zip"])
+        .add_filter("7-Zip archive", &["7z"])
         .pick_file()
     else {
         return;

@@ -141,7 +141,7 @@ pub fn draw_url_dialog(
     state.archive.show_zip_popup = open;
 }
 
-/// Opens the browser's ZIP file picker and starts the upload after selection.
+/// Opens the browser's archive file picker and starts the upload after selection.
 pub fn open_upload_picker(state: &mut crate::UIState) {
     let status = state.archive.upload_status.clone();
     let Some(window) = web_sys::window() else {
@@ -157,7 +157,7 @@ pub fn open_upload_picker(state: &mut crate::UIState) {
         return;
     };
     input.set_type("file");
-    input.set_accept(".zip,application/zip");
+    input.set_accept(".zip,.7z,application/zip");
 
     let on_change = Closure::wrap(Box::new(move |event: web_sys::Event| {
         let Some(input) = event
