@@ -24,8 +24,11 @@ pub(crate) async fn load_file(
     };
 
     let is_nif = file_name.ends_with(".nif");
-    let files = if file_name.ends_with(".zip") || mime_type == "application/zip" {
-        match crate::state::file::unzip(bytes, &load_status) {
+    let files = if file_name.ends_with(".zip")
+        || file_name.ends_with(".bsa")
+        || mime_type == "application/zip"
+    {
+        match crate::state::file::extract_archive(bytes, &load_status) {
             Ok(files) => files,
             Err(error) => {
                 let mut status = load_status.write().unwrap();
@@ -74,7 +77,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
 
                             spawn_local(async move {
                                 if let Some(file) =
-                                    file::pick_single_file(".nif,.zip,application/zip").await
+                                    file::pick_single_file(".nif,.zip,.bsa,application/zip").await
                                 {
                                     load_file(
                                         file,
@@ -91,7 +94,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
 
                         #[cfg(not(target_arch = "wasm32"))]
                         if let Some(file) = futures::executor::block_on(file::pick_single_file(
-                            ".nif,.zip,application/zip",
+                            ".nif,.zip,.bsa,application/zip",
                         )) {
                             params.state.archive.recent_source = crate::RecentFileSource::Disk;
                             futures::executor::block_on(load_file(
@@ -108,6 +111,21 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                     }
 
                     file::draw_recent_menu(ui, &mut params.state, &mut params.fsstate);
+
+                    let can_export = !params.export_meshes.is_empty();
+                    ui.menu_button("Export", |ui| {
+                        if ui
+                            .add_enabled(can_export, egui::Button::new("OBJ"))
+                            .clicked()
+                        {
+                            crate::ui::export::export_loaded_meshes(
+                                params.state.archive.selected_file.as_deref(),
+                                &params.meshes,
+                                &params.export_meshes,
+                            );
+                            ui.close();
+                        }
+                    });
 
                     #[cfg(target_arch = "wasm32")]
                     ui.separator();

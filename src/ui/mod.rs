@@ -1,4 +1,5 @@
 mod file;
+mod export;
 mod inspector;
 pub mod mesh_selection;
 mod settings;
@@ -45,6 +46,7 @@ pub struct UiSystemParams<'w, 's> {
     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
     pub pending_texture_loads: ResMut<'w, crate::nif::PendingTextureLoads>,
     pub loaded_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
+    pub export_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh, &'static Transform)>,
     pub loaded_materials: Query<
         'w,
         's,

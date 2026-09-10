@@ -67,6 +67,7 @@ pub enum FileError {
     #[cfg(target_arch = "wasm32")]
     FetchError(String),
     UnzipError(String),
+    BsaError(String),
     IoError(io::Error),
 }
 
@@ -77,6 +78,7 @@ impl fmt::Display for FileError {
             #[cfg(target_arch = "wasm32")]
             FileError::FetchError(message) => write!(f, "Fetch Error: {message}"),
             FileError::UnzipError(msg) => write!(f, "Unzip Error: {}", msg),
+            FileError::BsaError(msg) => write!(f, "BSA Error: {msg}"),
             FileError::IoError(err) => write!(f, "IO Error: {}", err),
         }
     }
@@ -92,8 +94,19 @@ impl std::error::Error for FileError {
     }
 }
 
+/// Extracts and normalizes every file in a ZIP or BSA archive.
+pub fn extract_archive(
+    archive_bytes: Vec<u8>,
+    status: &ArchiveLoadStatus,
+) -> Result<HashMap<String, Vec<u8>>, FileError> {
+    if archive_bytes.starts_with(&0x0000_0100_u32.to_le_bytes()) {
+        return extract_bsa(archive_bytes, status);
+    }
+    unzip(archive_bytes, status)
+}
+
 /// Extracts and normalizes every file in a ZIP archive.
-pub fn unzip(
+fn unzip(
     zip_bytes: Vec<u8>,
     status: &ArchiveLoadStatus,
 ) -> Result<HashMap<String, Vec<u8>>, FileError> {
@@ -121,6 +134,40 @@ pub fn unzip(
 
             file_system.insert(normalize_path(&name), contents);
         }
+    }
+
+    status.write().unwrap().phase = None;
+    Ok(file_system)
+}
+
+/// Extracts named BSA entries through the TES3 archive reader.
+fn extract_bsa(
+    bsa_bytes: Vec<u8>,
+    status: &ArchiveLoadStatus,
+) -> Result<HashMap<String, Vec<u8>>, FileError> {
+    status.write().unwrap().phase = Some("Opening BSA archive...".to_string());
+    let archive = tes3::bsa::Archive::from_slice(&bsa_bytes)
+        .map_err(|error| FileError::BsaError(error.to_string()))?;
+    if !archive.has_names() {
+        return Err(FileError::BsaError(
+            "BSA archives without stored file names cannot be browsed".to_string(),
+        ));
+    }
+
+    let mut file_system = HashMap::with_capacity(archive.len());
+    for (index, entry) in archive.entries().enumerate() {
+        status.write().unwrap().phase = Some(format!(
+            "Extracting files... {}/{}",
+            index + 1,
+            archive.len()
+        ));
+        let Some(name) = entry.name() else {
+            continue;
+        };
+        file_system.insert(
+            normalize_path(&String::from_utf8_lossy(name.as_ref())),
+            entry.as_bytes().to_vec(),
+        );
     }
 
     status.write().unwrap().phase = None;

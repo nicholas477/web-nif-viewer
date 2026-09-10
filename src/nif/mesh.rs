@@ -49,21 +49,42 @@ impl PendingTextureLoads {
         material: Handle<crate::PhongMaterial>,
     ) {
         let completed = Arc::clone(&self.completed);
-        let read_path = path.clone();
+        let lookup_paths = Self::texture_lookup_paths(&path);
 
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_futures::spawn_local(async move {
-            bevy::log::info!("Loading texture asynchronously: {read_path}");
-            let bytes = crate::state::file::Filesystem::read(&fsstate, &read_path, false).await;
-            completed.lock().unwrap().push(TextureLoadResult { path, bytes, material });
+            for read_path in lookup_paths {
+                bevy::log::info!("Loading texture asynchronously: {read_path}");
+                if let Some(bytes) = crate::state::file::Filesystem::read(&fsstate, &read_path, false).await {
+                    completed.lock().unwrap().push(TextureLoadResult {
+                        path: read_path,
+                        bytes: Some(bytes),
+                        material,
+                    });
+                    return;
+                }
+            }
+            completed.lock().unwrap().push(TextureLoadResult { path, bytes: None, material });
         });
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let bytes = bevy::tasks::futures_lite::future::block_on(
-                crate::state::file::Filesystem::read(&fsstate, &read_path, false),
-            );
-            completed.lock().unwrap().push(TextureLoadResult { path, bytes, material });
+            let mut bytes = None;
+            let mut resolved_path = path.clone();
+            for read_path in lookup_paths {
+                bytes = bevy::tasks::futures_lite::future::block_on(
+                    crate::state::file::Filesystem::read(&fsstate, &read_path, false),
+                );
+                if bytes.is_some() {
+                    resolved_path = read_path;
+                    break;
+                }
+            }
+            completed.lock().unwrap().push(TextureLoadResult {
+                path: resolved_path,
+                bytes,
+                material,
+            });
         }
     }
 
@@ -71,6 +92,21 @@ impl PendingTextureLoads {
         std::mem::take(&mut *self.completed.lock().unwrap())
     }
 
+
+/// Returns the requested texture path followed by a matching DDS or TGA alternative.
+fn texture_lookup_paths(path: &str) -> Vec<String> {
+    let mut paths = vec![path.to_string()];
+    let Some((stem, extension)) = path.rsplit_once('.') else {
+        return paths;
+    };
+    let alternate_extension = match extension.to_ascii_lowercase().as_str() {
+        "dds" => "tga",
+        "tga" => "dds",
+        _ => return paths,
+    };
+    paths.push(format!("{stem}.{alternate_extension}"));
+    paths
+}
     pub fn texture_for(&self, material: &Handle<crate::PhongMaterial>) -> Option<Handle<Image>> {
         self.textures.lock().unwrap().get(&material.id()).cloned()
     }

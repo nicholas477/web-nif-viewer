@@ -41,6 +41,7 @@ mod desktop {
         fn mime_type(&self) -> String {
             match self.path.extension().and_then(|extension| extension.to_str()) {
                 Some("zip") => "application/zip".to_string(),
+                Some("bsa") => "application/octet-stream".to_string(),
                 Some("nif") => "application/octet-stream".to_string(),
                 _ => String::new(),
             }

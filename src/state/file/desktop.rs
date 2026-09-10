@@ -9,5 +9,5 @@ pub fn read_archive(
 ) -> Result<HashMap<String, Vec<u8>>, FileError> {
 	fs::read(path)
 		.map_err(FileError::IoError)
-		.and_then(|bytes| super::unzip(bytes, status))
+		.and_then(|bytes| super::extract_archive(bytes, status))
 }

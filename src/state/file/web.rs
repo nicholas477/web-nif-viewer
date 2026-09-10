@@ -60,14 +60,14 @@ pub async fn upload_file(
 	Ok(download_url)
 }
 
-/// Downloads, extracts, and normalizes every file in a ZIP archive.
-pub async fn fetch_and_unzip(
+/// Downloads, extracts, and normalizes every file in a supported archive.
+pub async fn fetch_and_extract(
 	url: &str,
 	status: &ArchiveLoadStatus,
 ) -> Result<HashMap<String, Vec<u8>>, FileError> {
 	status.write().unwrap().phase = Some("Downloading archive...".to_string());
-	let zip_bytes = fetch_file_from_server(url).await.map_err(fetch_error)?;
-	super::unzip(zip_bytes, status)
+	let archive_bytes = fetch_file_from_server(url).await.map_err(fetch_error)?;
+	super::extract_archive(archive_bytes, status)
 }
 
 fn fetch_error(error: JsValue) -> FileError {

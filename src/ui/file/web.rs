@@ -65,7 +65,7 @@ pub fn download_archive(archive_url: String) {
     });
 }
 
-fn download_bytes(bytes: &[u8], file_name: &str) {
+pub(crate) fn download_bytes(bytes: &[u8], file_name: &str) {
     let parts = js_sys::Array::new();
     parts.push(&js_sys::Uint8Array::from(bytes).into());
     let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence(&parts) else {
@@ -260,16 +260,16 @@ fn fetch_archive(
     load_status: Arc<RwLock<crate::ArchiveLoadStatus>>,
 ) {
     spawn_local(async move {
-        match crate::state::file::fetch_and_unzip(&zip_url, &load_status).await {
+        match crate::state::file::fetch_and_extract(&zip_url, &load_status).await {
             Ok(files) => {
-                bevy::log::info!("Zip fetched and parsed successfully.");
+                bevy::log::info!("Archive fetched and parsed successfully.");
                 *file_system.write().unwrap() = Some(Box::new(
                     crate::state::file::HashmapFS::new_from_vec("".into(), files),
                 ));
             }
             Err(error) => {
                 let message = error.to_string();
-                bevy::log::error!("Error unzipping asset: {message}");
+                bevy::log::error!("Error extracting archive: {message}");
                 let mut status = load_status.write().unwrap();
                 status.phase = None;
                 status.error = Some(message);

@@ -1999,6 +1999,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsa"
+version = "0.0.1"
+source = "git+https://github.com/nicholas477/tes3.git#afe8b5d1846f9e523471220425a6c5482546dec1"
+dependencies = [
+ "bstr",
+ "memmap2",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5887,6 +5896,7 @@ name = "tes3"
 version = "0.0.1"
 source = "git+https://github.com/nicholas477/tes3.git#afe8b5d1846f9e523471220425a6c5482546dec1"
 dependencies = [
+ "bsa",
  "esp",
  "nif",
 ]
