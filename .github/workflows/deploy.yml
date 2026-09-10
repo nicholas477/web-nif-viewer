@@ -44,11 +44,12 @@ jobs:
         run : |
           WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name=="wasm-bindgen") | .version')
           cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --locked
+
           BINARYEN_URL=$(curl -fsSL https://api.github.com/repos/WebAssembly/binaryen/releases/latest | jq -r '.assets[] | select(.name | test("x86_64-linux\\.tar\\.gz$")) | .browser_download_url')
           curl -fsSL "$BINARYEN_URL" -o binaryen.tar.gz
-          BINARYEN_DIR=$(tar -tzf binaryen.tar.gz | head -1 | cut -d/ -f1)
-          tar -xzf binaryen.tar.gz
-          sudo install -m 0755 "$BINARYEN_DIR/bin/wasm-opt" /usr/local/bin/wasm-opt
+          mkdir binaryen
+          tar -xzf binaryen.tar.gz --strip-components=1 -C binaryen
+          sudo install -m 0755 binaryen/bin/wasm-opt /usr/local/bin/wasm-opt
 
       - name: Compile
         run: ./compile.sh
