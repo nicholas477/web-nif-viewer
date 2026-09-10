@@ -10,8 +10,8 @@ cargo build --release --target wasm32-unknown-unknown
 Write-Host "Running wasm-bindgen" -ForegroundColor Green
 wasm-bindgen --out-name esp-viewer --out-dir wasm/target --target web target/wasm32-unknown-unknown/release/esp-viewer.wasm
 
-#Write-Host "Running wasm-opt" -ForegroundColor Green
-#wasm-opt --enable-bulk-memory wasm/target/esp-viewer_bg.wasm -Oz --strip-debug -o wasm/target/esp-viewer_bg.wasm
+Write-Host "Running wasm-opt" -ForegroundColor Green
+#wasm-opt wasm/target/esp-viewer_bg.wasm -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --strip-debug -o wasm/target/esp-viewer_bg.wasm
 
 Write-Host "Copying assets" -ForegroundColor Green
 Remove-Item -Path "wasm/assets" -Recurse -Force -ErrorAction Ignore

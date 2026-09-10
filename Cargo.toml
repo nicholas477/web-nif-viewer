@@ -37,13 +37,12 @@ tes3 = { git = "https://github.com/nicholas477/tes3.git", features = [
     "inspect",
 ] }
 zip = "8.6.0"
-sevenz-rust2 = "0.22.2"
 toml = "1.1.5"
 serde_toml = "0.0.1"
 slotmap = "1.1.1"
 arc-slice = "0.1.0"
 async-trait = "0.1.92"
-futures = {version = "0.3.34", features = ["alloc"] }
+futures = { version = "0.3.34", features = ["alloc"] }
 
 [dependencies.bevy]
 version = "0.19.1"
@@ -87,6 +86,7 @@ bevy = { version = "0.19.1", features = ["dynamic_linking"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 directories = "6.0.0"
 rfd = "0.17"
+sevenz-rust2 = "0.22.2"
 
 # WebAssembly-specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -127,3 +127,4 @@ web-sys = { version = "0.3", features = [
     "IdbRequest",
 ] }
 js-sys = "0.3.104"
+sevenz-rust2 = { version = "0.22.2", features = ["default_wasm"] }
