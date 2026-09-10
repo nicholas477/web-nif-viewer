@@ -122,6 +122,7 @@ pub fn top_panel(viewport_ui: &mut Ui, params: &mut UiSystemParams) -> InnerResp
                                 params.state.archive.selected_file.as_deref(),
                                 &params.meshes,
                                 &params.export_meshes,
+                                &params.pending_texture_loads,
                             );
                             ui.close();
                         }

@@ -18,6 +18,13 @@ pub fn draw(
     let file_list_width = ui.available_width();
     let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
 
+    ui.add_enabled_ui(!loaded_file_names.is_empty(), |ui| {
+        ui.add(
+            egui::TextEdit::singleline(&mut state.archive.file_search_query)
+                .hint_text("Search files"),
+        );
+    });
+
     egui::Resize::default()
         .id_salt("file_list_resize")
         .default_width(file_list_width)
@@ -171,32 +178,18 @@ fn draw_file_list(
     let mut sorted_file_names = file_names.to_vec();
     sorted_file_names.sort_unstable();
     let mut clicked_file = None;
-    // let file_list_width = ui.available_width();
-    // let file_list_max_height = (ui.available_height() - 120.0).max(72.0);
 
-    // egui::Resize::default()
-    //     .id_salt("file_list_resize")
-    //     .default_width(file_list_width)
-    //     .default_height(180.0)
-    //     .min_width(file_list_width)
-    //     .min_height(72.0)
-    //     .max_width(file_list_width)
-    //     .max_height(file_list_max_height)
-    //     .resizable([false, true])
-    //     .show(ui, |ui| {
-    //         egui::ScrollArea::vertical()
-    //             .id_salt("file_list_scroll")
-    //             .auto_shrink([false, false])
-    //             .show(ui, |ui| {
+    let query = state.archive.file_search_query.to_ascii_lowercase();
     for file_name in sorted_file_names {
+        if !query.is_empty() && !file_name.contains(&query) {
+            continue;
+        }
         let is_selected = state.archive.selected_file.as_deref() == Some(file_name.as_str());
         if ui.selectable_label(is_selected, &file_name).clicked() {
             state.archive.selected_file = Some(file_name.clone());
             clicked_file = Some(file_name);
         }
     }
-    //         });
-    // });
 
     clicked_file
 }

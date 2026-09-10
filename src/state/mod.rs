@@ -119,6 +119,7 @@ pub struct ArchiveState {
     pub zip_url_input: String,
     pub recent_source: RecentFileSource,
     pub selected_file: Option<String>,
+    pub file_search_query: String,
     pub pending_file: Option<String>,
     pub pending_picker_file: Arc<RwLock<Option<String>>>,
     pub pending_picker_source: Arc<RwLock<Option<String>>>,

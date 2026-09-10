@@ -17,6 +17,7 @@ pub struct LoadedNifMesh {
     pub vertex_color_mesh: Handle<Mesh>,
     pub normal_mesh: Handle<Mesh>,
     pub diffuse_texture: Option<Handle<Image>>,
+    pub diffuse_texture_path: Option<String>,
     pub is_collision: bool,
     pub nif_node_index: Option<usize>,
 }
@@ -38,6 +39,7 @@ struct TextureLoadResult {
 pub struct PendingTextureLoads {
     completed: Arc<Mutex<Vec<TextureLoadResult>>>,
     textures: Arc<Mutex<HashMap<AssetId<crate::PhongMaterial>, Handle<Image>>>>,
+    texture_paths: Arc<Mutex<HashMap<AssetId<crate::PhongMaterial>, String>>>,
     missing_paths: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -93,22 +95,22 @@ impl PendingTextureLoads {
     }
 
 
-/// Returns the requested texture path followed by a matching DDS or TGA alternative.
-fn texture_lookup_paths(path: &str) -> Vec<String> {
-    let mut paths = vec![path.to_string()];
+    /// Returns texture paths in lookup priority order.
+    fn texture_lookup_paths(path: &str) -> Vec<String> {
     let Some((stem, extension)) = path.rsplit_once('.') else {
-        return paths;
+            return vec![path.to_string()];
     };
-    let alternate_extension = match extension.to_ascii_lowercase().as_str() {
-        "dds" => "tga",
-        "tga" => "dds",
-        _ => return paths,
-    };
-    paths.push(format!("{stem}.{alternate_extension}"));
-    paths
-}
+        match extension.to_ascii_lowercase().as_str() {
+            "bmp" | "tga" => vec![format!("{stem}.dds"), path.to_string()],
+            _ => vec![path.to_string()],
+        }
+    }
     pub fn texture_for(&self, material: &Handle<crate::PhongMaterial>) -> Option<Handle<Image>> {
         self.textures.lock().unwrap().get(&material.id()).cloned()
+    }
+
+    pub fn texture_path_for(&self, material: &Handle<crate::PhongMaterial>) -> Option<String> {
+        self.texture_paths.lock().unwrap().get(&material.id()).cloned()
     }
 
     /// Clears paths that were unresolved for the previously loaded NIF.
@@ -156,6 +158,7 @@ pub fn apply_completed_texture_loads(
             Ok(image) => {
                 let image = images.add(image);
                 pending.textures.lock().unwrap().insert(result.material.id(), image.clone());
+                pending.texture_paths.lock().unwrap().insert(result.material.id(), result.path.clone());
                 if let Some(mut material) = materials.get_mut(&result.material) {
                     if material.settings.x != 0.0 {
                         material.color_texture = Some(image);
@@ -429,6 +432,7 @@ pub fn load_nif(params: NifMeshLoadParams) -> Result<(), String> {
             vertex_color_mesh,
             normal_mesh,
             diffuse_texture,
+            diffuse_texture_path: texture_path.clone(),
             is_collision: collision_shapes.contains(&shape_link.key),
             nif_node_index: Some(nif_node_index),
         };

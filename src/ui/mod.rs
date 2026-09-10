@@ -46,7 +46,16 @@ pub struct UiSystemParams<'w, 's> {
     pub materials: ResMut<'w, Assets<crate::PhongMaterial>>,
     pub pending_texture_loads: ResMut<'w, crate::nif::PendingTextureLoads>,
     pub loaded_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh)>,
-    pub export_meshes: Query<'w, 's, (Entity, &'static LoadedNifMesh, &'static Transform)>,
+    pub export_meshes: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static LoadedNifMesh,
+            &'static Transform,
+            &'static MeshMaterial3d<crate::PhongMaterial>,
+        ),
+    >,
     pub loaded_materials: Query<
         'w,
         's,
