@@ -9,6 +9,7 @@ echo "Compiling wasm-bindgen..."
 wasm-bindgen --out-name esp-viewer --out-dir wasm/target --target web target/wasm32-unknown-unknown/release/esp-viewer.wasm
 
 echo "Optimizing WebAssembly..."
+wasm-opt --version
 wasm-opt wasm/target/esp-viewer_bg.wasm -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --strip-debug -o wasm/target/esp-viewer_bg.wasm
 
 echo "Copying assets..."
