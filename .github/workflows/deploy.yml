@@ -45,7 +45,7 @@ jobs:
           WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name=="wasm-bindgen") | .version')
           cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --locked
 
-          BINARYEN_URL=$(curl -fsSL https://api.github.com/repos/WebAssembly/binaryen/releases/latest | jq -r '.assets[] | select(.name | test("x86_64-linux\\.tar\\.gz$")) | .browser_download_url')
+          BINARYEN_URL=https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz
           curl -fsSL "$BINARYEN_URL" -o binaryen.tar.gz
           mkdir binaryen
 
