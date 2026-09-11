@@ -54,6 +54,7 @@ jobs:
           echo "sudo install -m 0755 binaryen/bin/wasm-opt /usr/bin/wasm-opt"
           sudo install -m 0755 binaryen/bin/wasm-opt /usr/bin/wasm-opt
           whereis wasm-opt
+          rm /home/runner/.cargo/bin/wasm-opt
           wasm-opt --version
 
       - name: Compile
